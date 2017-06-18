@@ -19,6 +19,19 @@ type mountPoint struct {
 type Machine struct {
 	mounts []mountPoint
 	count int
+	Command string
+}
+
+func NewMachine() (m Machine) {
+	m = Machine{ Command: "/bin/bash" }
+	// usr is mounted by specific label via /init
+	m.AppendStaticVirtFS("/usr", "usr")
+	// Mount for ssl certificates
+	m.AppendVirtFS("/etc/ssl")
+	// Alternative symlinks
+	m.AppendVirtFS("/etc/alternatives")
+
+	return
 }
 
 func charsToString(in []int8) string {
@@ -140,13 +153,6 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 }
 
 func (m *Machine) Run() {
-	// usr is mounted by specific label via /init
-	m.AppendStaticVirtFS("/usr", "usr")
-	// Mount for ssl certificates
-	m.AppendVirtFS("/etc/ssl")
-	// Alternative symlinks
-	m.AppendVirtFS("/etc/alternatives")
-
 	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 
 	if err != nil {
@@ -215,7 +221,7 @@ func (m *Machine) Run() {
 	m.writerKernelModules(w)
 
 	w.WriteFile("etc/systemd/system/serial-getty@ttyS0.service",
-		fmt.Sprintf(ServiceTemplate, "/bin/bash"), 0755)
+		fmt.Sprintf(ServiceTemplate, m.Command), 0755)
 
 	w.WriteFile("/init", InitScript, 0755)
 
