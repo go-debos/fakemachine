@@ -47,21 +47,9 @@ busybox modprobe 9pnet_virtio
 busybox modprobe 9p
 
 busybox mount -v -t 9p -o trans=virtio,version=9p2000.L usr /usr
-
-for cmd in $(cat /proc/cmdline) ; do
-  case ${cmd} in
-    wrap.mount=*)
-      LM=${cmd#wrap.mount=}
-      L=${LM%:*}
-      M=$(systemd-escape -u -p ${LM#*:})
-      mkdir -p ${M}
-      mount -v -t 9p -o trans=virtio,version=9p2000.L ${L} ${M}
-      ;;
-  esac
-done
-
 exec /lib/systemd/systemd
 `
+
 const Networkd = `
 [Match]
 Name=e*
