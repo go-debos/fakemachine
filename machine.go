@@ -93,9 +93,58 @@ func (m *Machine) AppendVirtFS(directory string) {
 	m.count = m.count + 1
 }
 
+func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
+	fstab := []string{"# Generated fstab file by fakemachine"}
+	for _,point := range m.mounts {
+		fstab = append(fstab,
+			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
+				point.label, point.directory))
+	}
+	fstab = append(fstab, "")
+
+	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
+}
+
+func (m *Machine) kernelRelease() string {
+	var u syscall.Utsname
+	syscall.Uname(&u)
+	return charsToString(u.Release[:])
+}
+
+func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
+	kernelRelease := m.kernelRelease()
+
+	modules := []string{
+		"kernel/drivers/virtio/virtio.ko",
+		"kernel/drivers/virtio/virtio_pci.ko",
+		"kernel/net/9p/9pnet.ko",
+		"kernel/drivers/virtio/virtio_ring.ko",
+		"kernel/fs/9p/9p.ko",
+		"kernel/net/9p/9pnet_virtio.ko",
+		"kernel/fs/fscache/fscache.ko",
+		"modules.order",
+		"modules.builtin",
+		"modules.dep",
+		"modules.dep.bin",
+		"modules.alias",
+		"modules.alias.bin",
+		"modules.softdep",
+		"modules.symbols",
+		"modules.symbols.bin",
+		"modules.builtin.bin",
+		"modules.devname"}
+
+	for _, v := range modules {
+		w.CopyFile(path.Join("/usr/lib/modules", kernelRelease, v))
+	}
+}
+
 func (m *Machine) Run() {
+	// usr is mounted by specific label via /init
 	m.AppendStaticVirtFS("/usr", "usr")
+	// Mount for ssl certificates
 	m.AppendVirtFS("/etc/ssl")
+	// Alternative symlinks
 	m.AppendVirtFS("/etc/alternatives")
 
 	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
@@ -163,54 +212,20 @@ func (m *Machine) Run() {
 		"/usr/lib/systemd/system/systemd-networkd.socket",
 		0755)
 
-	// TODO kernel modues
-	var u syscall.Utsname
-	syscall.Uname(&u)
-	kernelRelease := charsToString(u.Release[:])
-
-	modules := []string{
-		"kernel/drivers/virtio/virtio.ko",
-		"kernel/drivers/virtio/virtio_pci.ko",
-		"kernel/net/9p/9pnet.ko",
-		"kernel/drivers/virtio/virtio_ring.ko",
-		"kernel/fs/9p/9p.ko",
-		"kernel/net/9p/9pnet_virtio.ko",
-		"kernel/fs/fscache/fscache.ko",
-		"modules.order",
-		"modules.builtin",
-		"modules.dep",
-		"modules.dep.bin",
-		"modules.alias",
-		"modules.alias.bin",
-		"modules.softdep",
-		"modules.symbols",
-		"modules.symbols.bin",
-		"modules.builtin.bin",
-		"modules.devname"}
-
-	for _, v := range modules {
-		w.CopyFile(path.Join("/usr/lib/modules", kernelRelease, v))
-	}
+	m.writerKernelModules(w)
 
 	w.WriteFile("etc/systemd/system/serial-getty@ttyS0.service",
 		fmt.Sprintf(ServiceTemplate, "/bin/bash"), 0755)
 
 	w.WriteFile("/init", InitScript, 0755)
 
-	fstab := []string{"# Generated fstab file by fakemachine"}
-	for _,point := range m.mounts {
-		fstab = append(fstab,
-			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
-				point.label, point.directory))
-	}
-	fstab = append(fstab, "")
-
-	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
+  m.generateFstab(w)
 
 	w.Close()
 	f.Close()
 
 
+	kernelRelease := m.kernelRelease()
 	qemuargs := []string{"qemu-system-x86_64",
 		"-cpu", "host",
 		"-smp", "2",
