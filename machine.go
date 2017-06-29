@@ -45,7 +45,10 @@ func NewMachine() (m *Machine) {
 		m.AppendStaticVirtFS("/lib", "lib")
 	}
 	// Mount for ssl certificates
-	m.AppendVirtFS("/etc/ssl")
+	if _, err := os.Stat("/etc/ssl"); err == nil {
+		m.AppendVirtFS("/etc/ssl")
+	}
+
 	// Alternative symlinks
 	m.AppendVirtFS("/etc/alternatives")
 
