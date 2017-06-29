@@ -99,7 +99,10 @@ const networkd = `
 Name=e*
 
 [Network]
-DHCP=yes
+DHCP=ipv4
+# Disable link-local address to speedup boot
+LinkLocalAddressing=no
+IPv6AcceptRA=no
 `
 const commandWrapper = `#!/bin/sh
 
