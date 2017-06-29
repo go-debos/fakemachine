@@ -32,9 +32,10 @@ type mountPoint struct {
 type Machine struct {
 	mounts  []mountPoint
 	count   int
-	Command string
+	Command string // Command to execute in the machine, defaults to bash if not set
 }
 
+// Create a new machine object
 func NewMachine() (m *Machine) {
 	m = &Machine{Command: "/bin/bash"}
 	// usr is mounted by specific label via /init
@@ -139,12 +140,16 @@ func (m *Machine) addStaticVolume(directory, label string) {
 	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
 }
 
+// AddVolumeAt mounts hostDirectory from the host at machineDirectory in the
+// fake machine
 func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 	label := fmt.Sprintf("virtfs-%d", m.count)
 	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
 	m.count = m.count + 1
 }
 
+// AddVolume mounts directory from the host at the same location in the
+// fake machine
 func (m *Machine) AddVolume(directory string) {
 	m.AddVolumeAt(directory, directory)
 }
@@ -218,6 +223,8 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 	}
 }
 
+// Run creates the machine running the configured Command and returns its exit
+// code
 func (m *Machine) Run() int {
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
