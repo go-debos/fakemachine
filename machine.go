@@ -8,22 +8,22 @@ import (
 	"strings"
 	"syscall"
 
-  "fakemachine/cpio"
+	"fakemachine/cpio"
 )
 
 type mountPoint struct {
-		directory string
-		label string
-	}
+	directory string
+	label     string
+}
 
 type Machine struct {
-	mounts []mountPoint
-	count int
+	mounts  []mountPoint
+	count   int
 	Command string
 }
 
 func NewMachine() (m Machine) {
-	m = Machine{ Command: "/bin/bash" }
+	m = Machine{Command: "/bin/bash"}
 	// usr is mounted by specific label via /init
 	m.AppendStaticVirtFS("/usr", "usr")
 	// Mount for ssl certificates
@@ -108,7 +108,7 @@ func (m *Machine) AppendVirtFS(directory string) {
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	fstab := []string{"# Generated fstab file by fakemachine"}
-	for _,point := range m.mounts {
+	for _, point := range m.mounts {
 		fstab = append(fstab,
 			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
 				point.label, point.directory))
@@ -164,7 +164,6 @@ func (m *Machine) Run() {
 	w.WriteDirectory("/scratch", 01777)
 	w.WriteDirectory("/var/tmp", 01777)
 	w.WriteDirectory("/var/lib/dbus", 0755)
-
 
 	w.WriteDirectory("/tmp", 01777)
 	w.WriteDirectory("/sys", 0755)
@@ -225,11 +224,10 @@ func (m *Machine) Run() {
 
 	w.WriteFile("/init", InitScript, 0755)
 
-  m.generateFstab(w)
+	m.generateFstab(w)
 
 	w.Close()
 	f.Close()
-
 
 	kernelRelease := m.kernelRelease()
 	qemuargs := []string{"qemu-system-x86_64",
@@ -240,13 +238,13 @@ func (m *Machine) Run() {
 		"-kernel", "/boot/vmlinuz-" + kernelRelease,
 		"-initrd", InitrdPath,
 		"-nographic",
-		"-no-reboot" }
+		"-no-reboot"}
 	kernelargs := []string{"console=ttyS0", "quiet", "panic=-1"}
 
-	for _,point := range m.mounts {
+	for _, point := range m.mounts {
 		qemuargs = append(qemuargs, "-virtfs",
 			fmt.Sprintf("local,mount_tag=%s,path=%s,security_model=none",
-			point.label, point.directory))
+				point.label, point.directory))
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
