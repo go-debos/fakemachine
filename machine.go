@@ -2,32 +2,31 @@ package fakemachine
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
-	"io/ioutil"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
-	"strconv"
 
 	"fakemachine/cpio"
 )
 
-func mergedUsrSystem () bool {
-  f, _ := os.Lstat("/bin")
+func mergedUsrSystem() bool {
+	f, _ := os.Lstat("/bin")
 
-  if (f.Mode() & os.ModeSymlink) == os.ModeSymlink {
-    return true
-  }
+	if (f.Mode() & os.ModeSymlink) == os.ModeSymlink {
+		return true
+	}
 
-  return false
+	return false
 }
 
-
 type mountPoint struct {
-	hostDirectory string
+	hostDirectory    string
 	machineDirectory string
-	label     string
+	label            string
 }
 
 type Machine struct {
@@ -41,7 +40,7 @@ func NewMachine() (m *Machine) {
 	// usr is mounted by specific label via /init
 	m.AppendStaticVirtFS("/usr", "usr")
 
-	if ! mergedUsrSystem() {
+	if !mergedUsrSystem() {
 		m.AppendStaticVirtFS("/sbin", "sbin")
 		m.AppendStaticVirtFS("/bin", "bin")
 		m.AppendStaticVirtFS("/lib", "lib")
@@ -166,7 +165,7 @@ func (m *Machine) kernelRelease() string {
 	 * environments */
 	var u syscall.Utsname
 	syscall.Uname(&u)
-	release :=  charsToString(u.Release[:])
+	release := charsToString(u.Release[:])
 
 	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
 		return release
@@ -181,7 +180,7 @@ func (m *Machine) kernelRelease() string {
 		log.Fatal("No kernel found")
 	}
 
-	return (files[len(files) - 1]).Name()
+	return (files[len(files)-1]).Name()
 }
 
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
@@ -281,7 +280,7 @@ func (m *Machine) Run() int {
 	w.CopyFile("/etc/group")
 	w.CopyFile("/etc/nsswitch.conf")
 
-	w.WriteFile("/etc/systemd/network/ethernet.network", Networkd, 0444)
+	w.WriteFile("/etc/systemd/network/ethernet.network", networkd, 0444)
 	w.WriteSymlink(
 		"/lib/systemd/resolv.conf",
 		"/etc/resolv.conf",
@@ -354,7 +353,7 @@ func (m *Machine) Run() int {
 	}
 
 	exitstr, _ := ioutil.ReadAll(result)
-	exitcode, err :=  strconv.Atoi(strings.TrimSpace(string(exitstr)))
+	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
 
 	if err != nil {
 		log.Fatal(err)
