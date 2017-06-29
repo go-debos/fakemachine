@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"io/ioutil"
 	"path"
 	"strings"
 	"syscall"
@@ -149,9 +150,28 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 }
 
 func (m *Machine) kernelRelease() string {
+	/* First try the kernel the current system is running, but if there are no
+	 * modules for that try the latest from /lib/modules. The former works best
+	 * for systems direclty running fakemachine, the latter makes sense in docker
+	 * environments */
 	var u syscall.Utsname
 	syscall.Uname(&u)
-	return charsToString(u.Release[:])
+	release :=  charsToString(u.Release[:])
+
+	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
+		return release
+	}
+
+	files, err := ioutil.ReadDir("/usr/lib/modules")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if len(files) == 0 {
+		log.Fatal("No kernel found")
+	}
+
+	return (files[len(files) - 1]).Name()
 }
 
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
