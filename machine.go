@@ -208,18 +208,18 @@ func (m *Machine) Run() {
 		"/etc/resolv.conf",
 		0755)
 	w.WriteSymlink(
-		"/us//lib/systemd/system/systemd-networkd.service",
+		"/lib/systemd/system/systemd-networkd.service",
 		"/etc/systemd/system/multi-user.target.wants/systemd-networkd.service",
 		0755)
 
 	w.WriteSymlink(
+		"/lib/systemd/system/systemd-resolved.service",
 		"/etc/systemd/system/multi-user.target.wants/systemd-resolved.service",
-		"/us//lib/systemd/system/systemd-resolved.service",
 		0755)
 
 	w.WriteSymlink(
+		"/lib/systemd/system/systemd-networkd.socket",
 		"/etc/systemd/system/sockets.target.wants/systemd-networkd.socket",
-		"/usr/lib/systemd/system/systemd-networkd.socket",
 		0755)
 
 	m.writerKernelModules(w)
