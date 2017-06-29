@@ -11,6 +11,17 @@ import (
 	"fakemachine/cpio"
 )
 
+func mergedUsrSystem () bool {
+  f, _ := os.Lstat("/bin")
+
+  if (f.Mode() & os.ModeSymlink) == os.ModeSymlink {
+    return true
+  }
+
+  return false
+}
+
+
 type mountPoint struct {
 	hostDirectory string
 	machineDirectory string
@@ -23,10 +34,16 @@ type Machine struct {
 	Command string
 }
 
-func NewMachine() (m Machine) {
-	m = Machine{Command: "/bin/bash"}
+func NewMachine() (m *Machine) {
+	m = &Machine{Command: "/bin/bash"}
 	// usr is mounted by specific label via /init
 	m.AppendStaticVirtFS("/usr", "usr")
+
+	if ! mergedUsrSystem() {
+		m.AppendStaticVirtFS("/sbin", "sbin")
+		m.AppendStaticVirtFS("/bin", "bin")
+		m.AppendStaticVirtFS("/lib", "lib")
+	}
 	// Mount for ssl certificates
 	m.AppendVirtFS("/etc/ssl")
 	// Alternative symlinks
@@ -61,6 +78,11 @@ busybox modprobe 9pnet_virtio
 busybox modprobe 9p
 
 busybox mount -v -t 9p -o trans=virtio,version=9p2000.L usr /usr
+if ! busybox test -L /bin ; then
+	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L sbin /sbin
+	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L bin /bin
+	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L lib /lib
+fi
 exec /lib/systemd/systemd
 `
 
@@ -153,7 +175,11 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 		"modules.devname"}
 
 	for _, v := range modules {
-		w.CopyFile(path.Join("/usr/lib/modules", kernelRelease, v))
+		if mergedUsrSystem() {
+			w.CopyFile(path.Join("/usr/lib/modules", kernelRelease, v))
+		} else {
+			w.CopyFile(path.Join("/lib/modules", kernelRelease, v))
+		}
 	}
 }
 
@@ -179,14 +205,26 @@ func (m *Machine) Run() {
 	w.WriteDirectory("/lib64", 0755)
 
 	w.WriteSymlink("/run", "/var/run", 0755)
-	w.WriteSymlink("/usr/sbin", "/sbin", 0755)
-	w.WriteSymlink("/usr/bin", "/bin", 0755)
-	w.WriteSymlink("/usr/lib", "/lib", 0755)
 
+	if mergedUsrSystem() {
+		w.WriteSymlink("/usr/sbin", "/sbin", 0755)
+		w.WriteSymlink("/usr/bin", "/bin", 0755)
+		w.WriteSymlink("/usr/lib", "/lib", 0755)
+	} else {
+		w.WriteDirectory("/sbin", 0755)
+		w.WriteDirectory("/bin", 0755)
+		w.WriteDirectory("/lib", 0755)
+	}
+
+	prefix := ""
+	if mergedUsrSystem() {
+		prefix = "/usr"
+	}
+	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libc.so.6")
+	w.CopyFile(prefix + "/bin/busybox")
+
+	/* Amd64 dynamic linker */
 	w.CopyFile("/lib64/ld-linux-x86-64.so.2")
-	w.CopyFile("/usr/lib/x86_64-linux-gnu/libc.so.6")
-	// TODO broken with non-merged usr
-	w.CopyFile("/usr/bin/busybox")
 
 	w.WriteCharDevice("/dev/console", 5, 1, 0700)
 
