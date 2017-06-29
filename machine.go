@@ -12,7 +12,8 @@ import (
 )
 
 type mountPoint struct {
-	directory string
+	hostDirectory string
+	machineDirectory string
 	label     string
 }
 
@@ -97,13 +98,17 @@ SendSIGHUP=yes
 `
 
 func (m *Machine) AppendStaticVirtFS(directory, label string) {
-	m.mounts = append(m.mounts, mountPoint{directory, label})
+	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
+}
+
+func (m *Machine) AppendVirtFSMachineDir(hostDirectory, machineDirectory string) {
+	label := fmt.Sprintf("virtfs-%d", m.count)
+	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
+	m.count = m.count + 1
 }
 
 func (m *Machine) AppendVirtFS(directory string) {
-	label := fmt.Sprintf("virtfs-%d", m.count)
-	m.mounts = append(m.mounts, mountPoint{directory, label})
-	m.count = m.count + 1
+	m.AppendVirtFSMachineDir(directory, directory)
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
@@ -111,7 +116,7 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	for _, point := range m.mounts {
 		fstab = append(fstab,
 			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
-				point.label, point.directory))
+				point.label, point.machineDirectory))
 	}
 	fstab = append(fstab, "")
 
@@ -244,7 +249,7 @@ func (m *Machine) Run() {
 	for _, point := range m.mounts {
 		qemuargs = append(qemuargs, "-virtfs",
 			fmt.Sprintf("local,mount_tag=%s,path=%s,security_model=none",
-				point.label, point.directory))
+				point.label, point.hostDirectory))
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
