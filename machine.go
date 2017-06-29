@@ -117,8 +117,8 @@ Environment=HOME=/root
 WorkingDirectory=-/scratch
 ExecStartPre=/bin/echo Running: %[1]s
 ExecStart=%[1]s
-ExecStopPost=/usr/bin/sync
-ExecStopPost=/usr/sbin/poweroff -f
+ExecStopPost=/bin/sync
+ExecStopPost=/bin/systemctl poweroff -ff
 OnFailure=poweroff.target
 Type=idle
 StandardInput=tty-force
