@@ -106,7 +106,7 @@ DHCP=yes
 
 const ServiceTemplate = `
 [Unit]
-Description=Qemu wrap run
+Description=fakemachine runner
 Conflicts=shutdown.target
 Before=shutdown.target
 Requires=systemd-networkd-wait-online.service
