@@ -54,6 +54,10 @@ func NewMachine() (m *Machine) {
 	m.AppendVirtFS("/etc/dbus-1")
 	// Alternative symlinks
 	m.AppendVirtFS("/etc/alternatives")
+	// Debians binfmt registry
+	if _, err := os.Stat("/var/lib/binfmts"); err == nil {
+		m.AppendVirtFS("/var/lib/binfmts")
+	}
 
 	return
 }
@@ -283,6 +287,11 @@ func (m *Machine) Run() {
 	w.WriteSymlink(
 		"/lib/systemd/system/systemd-networkd.socket",
 		"/etc/systemd/system/sockets.target.wants/systemd-networkd.socket",
+		0755)
+
+	w.WriteSymlink(
+		"/lib/systemd/system/binfmt-support.service",
+		"/etc/systemd/system/multi-user.target.wants/binfmt-support.service",
 		0755)
 
 	m.writerKernelModules(w)
