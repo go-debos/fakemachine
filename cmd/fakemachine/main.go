@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/jessevdk/go-flags"
 	"fakemachine"
-	"os"
 	"fmt"
+	"github.com/jessevdk/go-flags"
+	"os"
 	"strings"
 )
 
@@ -16,17 +16,17 @@ var options Options
 var parser = flags.NewParser(&options, flags.Default)
 
 func SetupVolumes(m *fakemachine.Machine, options Options) {
-	for _, v := range(options.Volumes) {
+	for _, v := range options.Volumes {
 		parts := strings.Split(v, ":")
 
 		switch len(parts) {
-			case 1:
-				m.AddVolume(parts[0])
-			case 2:
-				m.AddVolumeAt(parts[0], parts[1])
-			default:
-				fmt.Fprintln(os.Stderr, "Failed to parse volume: %s", v)
-				os.Exit(1)
+		case 1:
+			m.AddVolume(parts[0])
+		case 2:
+			m.AddVolumeAt(parts[0], parts[1])
+		default:
+			fmt.Fprintln(os.Stderr, "Failed to parse volume: %s", v)
+			os.Exit(1)
 		}
 	}
 }
