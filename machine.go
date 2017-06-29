@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"strconv"
 
 	"fakemachine/cpio"
 )
@@ -76,8 +77,6 @@ func charsToString(in []int8) string {
 	return string(s[0:i])
 }
 
-const InitrdPath = "/tmp/initramfs.go.cpio"
-
 const InitScript = `#!/usr/bin/busybox sh
 
 busybox mount -t proc proc /proc
@@ -103,6 +102,12 @@ Name=e*
 [Network]
 DHCP=yes
 `
+const CommandWrapper = `#!/bin/sh
+
+echo Running %[1]s
+%[1]s
+echo $? > /run/fakemachine/result
+`
 
 const ServiceTemplate = `
 [Unit]
@@ -115,8 +120,7 @@ After=systemd-networkd-wait-online.service
 [Service]
 Environment=HOME=/root
 WorkingDirectory=-/scratch
-ExecStartPre=/bin/echo Running: %[1]s
-ExecStart=%[1]s
+ExecStart=/wrapper
 ExecStopPost=/bin/sync
 ExecStopPost=/bin/systemctl poweroff -ff
 OnFailure=poweroff.target
@@ -212,7 +216,15 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 	}
 }
 
-func (m *Machine) Run() {
+func (m *Machine) Run() int {
+	tmpdir, err := ioutil.TempDir("", "fakemachine-")
+	if err != nil {
+		log.Fatal(err)
+	}
+	m.AppendVirtFSMachineDir(tmpdir, "/run/fakemachine")
+	defer os.RemoveAll(tmpdir)
+
+	InitrdPath := path.Join(tmpdir, "initramfs.cpio")
 	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 
 	if err != nil {
@@ -297,7 +309,10 @@ func (m *Machine) Run() {
 	m.writerKernelModules(w)
 
 	w.WriteFile("etc/systemd/system/serial-getty@ttyS0.service",
-		fmt.Sprintf(ServiceTemplate, m.Command), 0755)
+		ServiceTemplate, 0755)
+
+	w.WriteFile("/wrapper",
+		fmt.Sprintf(CommandWrapper, m.Command), 0755)
 
 	w.WriteFile("/init", InitScript, 0755)
 
@@ -332,4 +347,18 @@ func (m *Machine) Run() {
 
 	p, _ := os.StartProcess("/usr/bin/qemu-system-x86_64", qemuargs, &pa)
 	p.Wait()
+
+	result, err := os.Open(path.Join(tmpdir, "result"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	exitstr, _ := ioutil.ReadAll(result)
+	exitcode, err :=  strconv.Atoi(strings.TrimSpace(string(exitstr)))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return exitcode
 }

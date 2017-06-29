@@ -48,5 +48,5 @@ func main() {
 	if len(args) > 0 {
 		m.Command = strings.Join(args, " ")
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
