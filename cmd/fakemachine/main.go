@@ -21,9 +21,9 @@ func SetupVolumes(m *fakemachine.Machine, options Options) {
 
 		switch len(parts) {
 			case 1:
-				m.AppendVirtFS(parts[0])
+				m.AddVolume(parts[0])
 			case 2:
-				m.AppendVirtFSMachineDir(parts[0], parts[1])
+				m.AddVolumeAt(parts[0], parts[1])
 			default:
 				fmt.Fprintln(os.Stderr, "Failed to parse volume: %s", v)
 				os.Exit(1)

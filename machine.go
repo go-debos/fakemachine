@@ -38,25 +38,25 @@ type Machine struct {
 func NewMachine() (m *Machine) {
 	m = &Machine{Command: "/bin/bash"}
 	// usr is mounted by specific label via /init
-	m.AppendStaticVirtFS("/usr", "usr")
+	m.addStaticVolume("/usr", "usr")
 
 	if !mergedUsrSystem() {
-		m.AppendStaticVirtFS("/sbin", "sbin")
-		m.AppendStaticVirtFS("/bin", "bin")
-		m.AppendStaticVirtFS("/lib", "lib")
+		m.addStaticVolume("/sbin", "sbin")
+		m.addStaticVolume("/bin", "bin")
+		m.addStaticVolume("/lib", "lib")
 	}
 	// Mount for ssl certificates
 	if _, err := os.Stat("/etc/ssl"); err == nil {
-		m.AppendVirtFS("/etc/ssl")
+		m.AddVolume("/etc/ssl")
 	}
 
 	// Dbus configuration
-	m.AppendVirtFS("/etc/dbus-1")
+	m.AddVolume("/etc/dbus-1")
 	// Alternative symlinks
-	m.AppendVirtFS("/etc/alternatives")
+	m.AddVolume("/etc/alternatives")
 	// Debians binfmt registry
 	if _, err := os.Stat("/var/lib/binfmts"); err == nil {
-		m.AppendVirtFS("/var/lib/binfmts")
+		m.AddVolume("/var/lib/binfmts")
 	}
 
 	return
@@ -132,18 +132,18 @@ IgnoreSIGPIPE=no
 SendSIGHUP=yes
 `
 
-func (m *Machine) AppendStaticVirtFS(directory, label string) {
+func (m *Machine) addStaticVolume(directory, label string) {
 	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
 }
 
-func (m *Machine) AppendVirtFSMachineDir(hostDirectory, machineDirectory string) {
+func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 	label := fmt.Sprintf("virtfs-%d", m.count)
 	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
 	m.count = m.count + 1
 }
 
-func (m *Machine) AppendVirtFS(directory string) {
-	m.AppendVirtFSMachineDir(directory, directory)
+func (m *Machine) AddVolume(directory string) {
+	m.AddVolumeAt(directory, directory)
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
@@ -220,7 +220,7 @@ func (m *Machine) Run() int {
 	if err != nil {
 		log.Fatal(err)
 	}
-	m.AppendVirtFSMachineDir(tmpdir, "/run/fakemachine")
+	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer os.RemoveAll(tmpdir)
 
 	InitrdPath := path.Join(tmpdir, "initramfs.cpio")
