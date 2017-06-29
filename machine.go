@@ -50,6 +50,8 @@ func NewMachine() (m *Machine) {
 		m.AppendVirtFS("/etc/ssl")
 	}
 
+	// Dbus configuration
+	m.AppendVirtFS("/etc/dbus-1")
 	// Alternative symlinks
 	m.AppendVirtFS("/etc/alternatives")
 
