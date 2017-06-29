@@ -77,7 +77,7 @@ func charsToString(in []int8) string {
 	return string(s[0:i])
 }
 
-const InitScript = `#!/usr/bin/busybox sh
+const initScript = `#!/usr/bin/busybox sh
 
 busybox mount -t proc proc /proc
 busybox mount -t sysfs none /sys
@@ -95,21 +95,21 @@ fi
 exec /lib/systemd/systemd
 `
 
-const Networkd = `
+const networkd = `
 [Match]
 Name=e*
 
 [Network]
 DHCP=yes
 `
-const CommandWrapper = `#!/bin/sh
+const commandWrapper = `#!/bin/sh
 
 echo Running %[1]s
 %[1]s
 echo $? > /run/fakemachine/result
 `
 
-const ServiceTemplate = `
+const serviceTemplate = `
 [Unit]
 Description=fakemachine runner
 Conflicts=shutdown.target
@@ -309,12 +309,12 @@ func (m *Machine) Run() int {
 	m.writerKernelModules(w)
 
 	w.WriteFile("etc/systemd/system/serial-getty@ttyS0.service",
-		ServiceTemplate, 0755)
+		serviceTemplate, 0755)
 
 	w.WriteFile("/wrapper",
-		fmt.Sprintf(CommandWrapper, m.Command), 0755)
+		fmt.Sprintf(commandWrapper, m.Command), 0755)
 
-	w.WriteFile("/init", InitScript, 0755)
+	w.WriteFile("/init", initScript, 0755)
 
 	m.generateFstab(w)
 
