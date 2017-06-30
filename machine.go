@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"fakemachine/cpio"
+	"github.com/sjoerdsimons/fakemachine/cpio"
 )
 
 func mergedUsrSystem() bool {
