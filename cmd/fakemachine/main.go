@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fakemachine"
 	"fmt"
 	"github.com/jessevdk/go-flags"
+	"github.com/sjoerdsimons/fakemachine"
 	"os"
 	"strings"
 )
