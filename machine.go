@@ -32,6 +32,7 @@ type mountPoint struct {
 type Machine struct {
 	mounts  []mountPoint
 	count   int
+	images  []string
 	Command string // Command to execute in the machine, defaults to bash if not set
 }
 
@@ -152,6 +153,34 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 // fake machine
 func (m *Machine) AddVolume(directory string) {
 	m.AddVolumeAt(directory, directory)
+}
+
+// CreateImage creates an image file at path a given size and exposes it in
+// the fake machine. If size is -1 then the image should already exist and the
+// size isn't modified.
+func (m *Machine) CreateImage(path string, size int64) error {
+	if size < 0 {
+		_, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+	}
+
+	i, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+
+	if size >= 0 {
+		err = i.Truncate(size)
+		if err != nil {
+			return err
+		}
+	}
+
+	i.Close()
+	m.images = append(m.images, path)
+	return nil
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
@@ -346,6 +375,12 @@ func (m *Machine) Run() int {
 		qemuargs = append(qemuargs, "-virtfs",
 			fmt.Sprintf("local,mount_tag=%s,path=%s,security_model=none",
 				point.label, point.hostDirectory))
+	}
+
+	for _, image := range m.images {
+		qemuargs = append(qemuargs, "-drive",
+			fmt.Sprintf("file=%s,if=virtio,format=raw",
+				image))
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
