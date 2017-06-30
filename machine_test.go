@@ -25,3 +25,16 @@ func TestCommandNotFound(t *testing.T) {
 		t.Fatalf("Expected 127 but got %d", exitcode)
 	}
 }
+
+func TestImage(t *testing.T) {
+	m := NewMachine()
+
+	m.CreateImage("test.img", 1024*1024)
+	m.Command = "test -b /dev/vda"
+
+	exitcode := m.Run()
+
+	if exitcode != 0 {
+		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
+	}
+}
