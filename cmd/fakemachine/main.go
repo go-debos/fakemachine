@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/jessevdk/go-flags"
+	"github.com/docker/go-units"
 	"github.com/sjoerdsimons/fakemachine"
 	"os"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 type Options struct {
 	Volumes []string `short:"v" long:"volume" description:"volume to mount"`
+	Images []string `short:"i" long:"image" description:"image to add"`
 }
 
 var options Options
@@ -31,6 +33,33 @@ func SetupVolumes(m *fakemachine.Machine, options Options) {
 	}
 }
 
+func SetupImages(m *fakemachine.Machine, options Options) {
+	for _, i := range options.Images {
+		parts := strings.Split(i, ":")
+		var err error
+
+		switch len(parts) {
+		case 1:
+			err = m.CreateImage(parts[0], -1)
+		case 2:
+			var size int64
+			size, err = units.FromHumanSize(parts[1])
+			if err != nil {
+				break
+			}
+			err = m.CreateImage(parts[0], size)
+		default:
+			fmt.Fprintf(os.Stderr, "Failed to parse image: %s\n", i)
+			os.Exit(1)
+		}
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create image: %s %v\n", i, err)
+			os.Exit(1)
+		}
+	}
+}
+
 func main() {
 	args, err := parser.Parse()
 	if err != nil {
@@ -44,6 +73,7 @@ func main() {
 
 	m := fakemachine.NewMachine()
 	SetupVolumes(m, options)
+	SetupImages(m, options)
 
 	if len(args) > 0 {
 		m.Command = strings.Join(args, " ")
