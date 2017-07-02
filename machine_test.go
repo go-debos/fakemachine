@@ -38,3 +38,15 @@ func TestImage(t *testing.T) {
 		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
 	}
 }
+
+func TestScratchTmp(t *testing.T) {
+	m := NewMachine()
+
+	m.Command = "mountpoint /scratch"
+
+	exitcode := m.Run()
+
+	if exitcode != 0 {
+		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
+	}
+}
