@@ -185,6 +185,9 @@ func (m *Machine) CreateImage(path string, size int64) error {
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	fstab := []string{"# Generated fstab file by fakemachine"}
+
+	fstab = append(fstab, "none /scratch tmpfs size=95% 0 0")
+
 	for _, point := range m.mounts {
 		fstab = append(fstab,
 			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
