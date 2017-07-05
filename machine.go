@@ -33,12 +33,14 @@ type Machine struct {
 	mounts  []mountPoint
 	count   int
 	images  []string
+	memory  int
+
 	Command string // Command to execute in the machine, defaults to bash if not set
 }
 
 // Create a new machine object
 func NewMachine() (m *Machine) {
-	m = &Machine{Command: "/bin/bash"}
+	m = &Machine{Command: "/bin/bash", memory: 2048}
 	// usr is mounted by specific label via /init
 	m.addStaticVolume("/usr", "usr")
 
@@ -181,6 +183,13 @@ func (m *Machine) CreateImage(path string, size int64) error {
 	i.Close()
 	m.images = append(m.images, path)
 	return nil
+}
+
+// CreateImage creates an image file at path a given size and exposes it in
+// the fake machine. If size is -1 then the image should already exist and the
+// size isn't modified.
+func (m *Machine) SetMemory(memory int) {
+	m.memory = memory
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
@@ -363,10 +372,11 @@ func (m *Machine) Run() int {
 	f.Close()
 
 	kernelRelease := m.kernelRelease()
+	memory := fmt.Sprintf("%d", m.memory)
 	qemuargs := []string{"qemu-system-x86_64",
 		"-cpu", "host",
 		"-smp", "2",
-		"-m", "2048",
+		"-m", memory,
 		"-enable-kvm",
 		"-kernel", "/boot/vmlinuz-" + kernelRelease,
 		"-initrd", InitrdPath,

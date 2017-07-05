@@ -12,6 +12,7 @@ import (
 type Options struct {
 	Volumes []string `short:"v" long:"volume" description:"volume to mount"`
 	Images []string `short:"i" long:"image" description:"image to add"`
+	Memory int `short:"m" long:"memory" description:"Amount of memory for the fakemachine"`
 }
 
 var options Options
@@ -74,6 +75,10 @@ func main() {
 	m := fakemachine.NewMachine()
 	SetupVolumes(m, options)
 	SetupImages(m, options)
+
+	if options.Memory > 0 {
+		m.SetMemory(options.Memory)
+	}
 
 	if len(args) > 0 {
 		m.Command = strings.Join(args, " ")
