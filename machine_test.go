@@ -48,9 +48,9 @@ func TestMemory(t *testing.T) {
 	m := NewMachine()
 
 	m.SetMemory(1024)
-// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
-// which is not really what fakemachine expects but seems good enough for
-// testing
+	// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
+	// which is not really what fakemachine expects but seems good enough for
+	// testing
 	command := `
 MEM=$(grep MemTotal /proc/meminfo  | awk ' { print $2 } ' )
 # MemTotal is usable ram, not physical ram so accept a range
