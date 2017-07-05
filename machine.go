@@ -30,17 +30,15 @@ type mountPoint struct {
 }
 
 type Machine struct {
-	mounts  []mountPoint
-	count   int
-	images  []string
-	memory  int
-
-	Command string // Command to execute in the machine, defaults to bash if not set
+	mounts []mountPoint
+	count  int
+	images []string
+	memory int
 }
 
 // Create a new machine object
 func NewMachine() (m *Machine) {
-	m = &Machine{Command: "/bin/bash", memory: 2048}
+	m = &Machine{memory: 2048}
 	// usr is mounted by specific label via /init
 	m.addStaticVolume("/usr", "usr")
 
@@ -264,9 +262,8 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 	}
 }
 
-// Run creates the machine running the configured Command and returns its exit
-// code
-func (m *Machine) Run() int {
+// Run creates the machine running the given command
+func (m *Machine) Run(command string) int {
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
 		log.Fatal(err)
@@ -362,7 +359,7 @@ func (m *Machine) Run() int {
 		serviceTemplate, 0755)
 
 	w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, m.Command), 0755)
+		fmt.Sprintf(commandWrapper, command), 0755)
 
 	w.WriteFile("/init", initScript, 0755)
 

@@ -80,8 +80,9 @@ func main() {
 		m.SetMemory(options.Memory)
 	}
 
+	command := "/bin/bash"
 	if len(args) > 0 {
-		m.Command = strings.Join(args, " ")
+		command = strings.Join(args, " ")
 	}
-	os.Exit(m.Run())
+	os.Exit(m.Run(command))
 }
