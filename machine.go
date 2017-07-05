@@ -108,7 +108,7 @@ IPv6AcceptRA=no
 `
 const commandWrapper = `#!/bin/sh
 
-echo Running %[1]s
+echo Running '%[1]s'
 %[1]s
 echo $? > /run/fakemachine/result
 `
