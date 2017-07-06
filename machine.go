@@ -64,6 +64,12 @@ func NewMachine() (m *Machine) {
 	return
 }
 
+func InMachine() (ret bool) {
+	_, ret = os.LookupEnv("IN_FAKE_MACHINE")
+
+	return
+}
+
 func charsToString(in []int8) string {
 	s := make([]byte, len(in))
 
@@ -122,7 +128,7 @@ Requires=systemd-networkd-wait-online.service
 After=systemd-networkd-wait-online.service
 
 [Service]
-Environment=HOME=/root
+Environment=HOME=/root IN_FAKE_MACHINE=yes
 WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
