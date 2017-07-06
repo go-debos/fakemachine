@@ -118,12 +118,12 @@ func (w *WriterHelper) CopyTree(path string) {
 	filepath.Walk(path, walker)
 }
 
-func (w *WriterHelper) CopyFile(in string) error {
-	w.ensureBaseDirectory(path.Dir(in))
+func (w *WriterHelper) CopyFileTo(src, dst string) error {
+	w.ensureBaseDirectory(path.Dir(dst))
 
-	f, err := os.Open(in)
+	f, err := os.Open(src)
 	if err != nil {
-		log.Panicf("open failed: %s - %v", in, err)
+		log.Panicf("open failed: %s - %v", src, err)
 		return err
 	}
 	defer f.Close()
@@ -136,7 +136,7 @@ func (w *WriterHelper) CopyFile(in string) error {
 	hdr := new(cpio.Header)
 
 	hdr.Type = cpio.TYPE_REG
-	hdr.Name = in
+	hdr.Name = dst
 	hdr.Mode = int64(info.Mode() & ^os.ModeType)
 	hdr.Size = info.Size()
 
@@ -144,4 +144,8 @@ func (w *WriterHelper) CopyFile(in string) error {
 	io.Copy(w, f)
 
 	return nil
+}
+
+func (w *WriterHelper) CopyFile(in string) error {
+	return w.CopyFileTo(in, in)
 }
