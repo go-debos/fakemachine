@@ -268,8 +268,9 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 	}
 }
 
-// Run creates the machine running the given command
-func (m *Machine) Run(command string) int {
+// Start the machine running the given command and adding the extra content to
+// the cpio. Extracontent is a list of {source, dest} tuples
+func (m *Machine) startup(command string, extracontent [][2]string) int {
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
 		log.Fatal(err)
@@ -371,6 +372,10 @@ func (m *Machine) Run(command string) int {
 
 	m.generateFstab(w)
 
+	for _, v := range extracontent {
+		w.CopyFileTo(v[0], v[1])
+	}
+
 	w.Close()
 	f.Close()
 
@@ -421,4 +426,31 @@ func (m *Machine) Run(command string) int {
 	}
 
 	return exitcode
+}
+
+// Run creates the machine running the given command
+func (m *Machine) Run(command string) int {
+	return m.startup(command, nil)
+}
+
+// RunInMachineWithArgs runs the caller binary inside the fakemachine with the
+// specified commandline arguments
+func (m *Machine) RunInMachineWithArgs(args []string) int {
+	name := path.Join("/", path.Base(os.Args[0]))
+
+	// FIXME: shell escaping?
+	command := strings.Join(append([]string{name}, args...), " ")
+
+	return m.startup(command, [][2]string{{os.Args[0], name}})
+}
+
+// RunInMachine runs the caller binary inside the fakemachine with the same
+// commandline arguments as the parent
+func (m *Machine) RunInMachine() int {
+	name := path.Join("/", path.Base(os.Args[0]))
+
+	// FIXME: shell escaping?
+	command := strings.Join(append([]string{name}, os.Args[1:]...), " ")
+
+	return m.startup(command, [][2]string{{os.Args[0], name}})
 }

@@ -64,3 +64,19 @@ fi
 		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
 	}
 }
+
+func TestSpawnMachine(t *testing.T) {
+
+	if InMachine() {
+		t.Log("Running in the machine")
+		return
+	}
+
+	m := NewMachine()
+
+	exitcode := m.RunInMachineWithArgs([]string{"-test.run TestSpawnMachine"})
+
+	if exitcode != 0 {
+		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
+	}
+}
