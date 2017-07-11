@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -441,7 +442,13 @@ func (m *Machine) RunInMachineWithArgs(args []string) int {
 	// FIXME: shell escaping?
 	command := strings.Join(append([]string{name}, args...), " ")
 
-	return m.startup(command, [][2]string{{os.Args[0], name}})
+	executable, err := exec.LookPath(os.Args[0])
+
+	if err != nil {
+		log.Fatalf("Failed to find executable: %v\n", err)
+	}
+
+	return m.startup(command, [][2]string{{executable, name}})
 }
 
 // RunInMachine runs the caller binary inside the fakemachine with the same
