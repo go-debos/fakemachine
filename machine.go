@@ -71,6 +71,11 @@ func InMachine() (ret bool) {
 	return
 }
 
+func Supported() bool {
+  _, err := os.Stat("/dev/kvm")
+  return err == nil
+}
+
 func charsToString(in []int8) string {
 	s := make([]byte, len(in))
 
