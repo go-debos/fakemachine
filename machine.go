@@ -230,7 +230,7 @@ func (m *Machine) kernelRelease() string {
 		return release
 	}
 
-	files, err := ioutil.ReadDir("/usr/lib/modules")
+	files, err := ioutil.ReadDir("/lib/modules")
 	if err != nil {
 		log.Fatal(err)
 	}
