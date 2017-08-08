@@ -90,7 +90,7 @@ func charsToString(in []int8) string {
 	return string(s[0:i])
 }
 
-const initScript = `#!/usr/bin/busybox sh
+const initScript = `#!/bin/busybox sh
 
 busybox mount -t proc proc /proc
 busybox mount -t sysfs none /sys
