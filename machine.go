@@ -90,7 +90,7 @@ func charsToString(in []int8) string {
 	return string(s[0:i])
 }
 
-const initScript = `#!/usr/bin/busybox sh
+const initScript = `#!/bin/busybox sh
 
 busybox mount -t proc proc /proc
 busybox mount -t sysfs none /sys
@@ -230,7 +230,7 @@ func (m *Machine) kernelRelease() string {
 		return release
 	}
 
-	files, err := ioutil.ReadDir("/usr/lib/modules")
+	files, err := ioutil.ReadDir("/lib/modules")
 	if err != nil {
 		log.Fatal(err)
 	}
