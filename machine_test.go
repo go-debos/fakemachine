@@ -7,7 +7,7 @@ import (
 func TestSuccessfullCommand(t *testing.T) {
 	m := NewMachine()
 
-	exitcode := m.Run("ls /")
+	exitcode, _ := m.Run("ls /")
 
 	if exitcode != 0 {
 		t.Fatalf("Expected 0 but got %d", exitcode)
@@ -16,7 +16,7 @@ func TestSuccessfullCommand(t *testing.T) {
 
 func TestCommandNotFound(t *testing.T) {
 	m := NewMachine()
-	exitcode := m.Run("/a/b/c /")
+	exitcode, _ := m.Run("/a/b/c /")
 
 	if exitcode != 127 {
 		t.Fatalf("Expected 127 but got %d", exitcode)
@@ -27,7 +27,7 @@ func TestImage(t *testing.T) {
 	m := NewMachine()
 
 	m.CreateImage("test.img", 1024*1024)
-	exitcode := m.Run("test -b /dev/vda")
+	exitcode, _ := m.Run("test -b /dev/vda")
 
 	if exitcode != 0 {
 		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
@@ -37,7 +37,7 @@ func TestImage(t *testing.T) {
 func TestScratchTmp(t *testing.T) {
 	m := NewMachine()
 
-	exitcode := m.Run("mountpoint /scratch")
+	exitcode, _ := m.Run("mountpoint /scratch")
 
 	if exitcode != 0 {
 		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
@@ -58,7 +58,7 @@ if [ ${MEM} -lt 900000 -o ${MEM} -gt 1024000 ] ; then
   exit 1
 fi
 `
-	exitcode := m.Run(command)
+	exitcode, _ := m.Run(command)
 
 	if exitcode != 0 {
 		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
@@ -74,7 +74,7 @@ func TestSpawnMachine(t *testing.T) {
 
 	m := NewMachine()
 
-	exitcode := m.RunInMachineWithArgs([]string{"-test.run TestSpawnMachine"})
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestSpawnMachine"})
 
 	if exitcode != 0 {
 		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
