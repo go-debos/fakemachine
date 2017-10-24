@@ -23,6 +23,7 @@ func mergedUsrSystem() bool {
 	return false
 }
 
+// Mapping host directory to mount point in fake machine
 type mountPoint struct {
 	hostDirectory    string
 	machineDirectory string
@@ -35,15 +36,26 @@ type image struct {
 }
 
 type Machine struct {
-	mounts []mountPoint
-	count  int
-	images []image
-	memory int
+	mounts       []mountPoint
+	fstabEntries []mountEntry
+	count        int
+	images       []image
+	memory       int
 
 	scratchsize int64
 	scratchpath string
 	scratchfile string
 	scratchdev  string
+}
+
+// Keeps entry to be added to '/etc/fstab' in fake machine
+type mountEntry struct {
+	fs_spec    string
+	fs_file    string
+	fs_vfstype string
+	fs_mntops  string
+	fs_freq    int
+	fs_passno  int
 }
 
 // Create a new machine object
@@ -160,6 +172,7 @@ SendSIGHUP=yes
 
 func (m *Machine) addStaticVolume(directory, label string) {
 	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
+	m.addFstabEntry(label, directory, "9p", "trans=virtio,version=9p2000.L", 0, 0)
 }
 
 // AddVolumeAt mounts hostDirectory from the host at machineDirectory in the
@@ -167,6 +180,7 @@ func (m *Machine) addStaticVolume(directory, label string) {
 func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 	label := fmt.Sprintf("virtfs-%d", m.count)
 	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
+	m.addFstabEntry(label, machineDirectory, "9p", "trans=virtio,version=9p2000.L", 0, 0)
 	m.count = m.count + 1
 }
 
@@ -247,21 +261,41 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	}
 }
 
+// addFstabEntry saves mount information about mount points to be added
+// to '/etc/fstab' for usage in fake machine
+// Options description is available in fstab(5)
+func (m *Machine) addFstabEntry(spec, file, vfstype, mntops string, freq, passno int) {
+	entry := mountEntry{}
+	entry.fs_spec = spec
+	entry.fs_file = file
+	entry.fs_vfstype = vfstype
+	entry.fs_mntops = mntops
+	entry.fs_freq = freq
+	entry.fs_passno = passno
+
+	m.fstabEntries = append(m.fstabEntries, entry)
+}
+
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
+
 	fstab := []string{"# Generated fstab file by fakemachine"}
-
 	if m.scratchfile == "" {
-		fstab = append(fstab, "none /scratch tmpfs size=95% 0 0")
+		m.addFstabEntry("none", "/scratch", "tmpfs", "size=95%", 0, 0)
 	} else {
-		fstab = append(fstab, fmt.Sprintf("%s /scratch ext4 defaults,relatime 0 0",
-			m.scratchdev))
+		m.addFstabEntry(m.scratchdev, "/scratch", "ext4", "defaults,relatime", 0, 0)
 	}
 
-	for _, point := range m.mounts {
+	for _, entry := range m.fstabEntries {
 		fstab = append(fstab,
-			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
-				point.label, point.machineDirectory))
+			fmt.Sprintf("%s %s %s %s %d %d",
+				entry.fs_spec,
+				entry.fs_file,
+				entry.fs_vfstype,
+				entry.fs_mntops,
+				entry.fs_freq,
+				entry.fs_passno))
 	}
+
 	fstab = append(fstab, "")
 
 	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
