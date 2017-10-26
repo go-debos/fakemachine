@@ -3,7 +3,6 @@ package fakemachine
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -72,8 +71,8 @@ func InMachine() (ret bool) {
 }
 
 func Supported() bool {
-  _, err := os.Stat("/dev/kvm")
-  return err == nil
+	_, err := os.Stat("/dev/kvm")
+	return err == nil
 }
 
 func charsToString(in []int8) string {
@@ -217,7 +216,7 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
 }
 
-func (m *Machine) kernelRelease() string {
+func (m *Machine) kernelRelease() (string, error) {
 	/* First try the kernel the current system is running, but if there are no
 	 * modules for that try the latest from /lib/modules. The former works best
 	 * for systems direclty running fakemachine, the latter makes sense in docker
@@ -227,23 +226,26 @@ func (m *Machine) kernelRelease() string {
 	release := charsToString(u.Release[:])
 
 	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
-		return release
+		return release, nil
 	}
 
 	files, err := ioutil.ReadDir("/lib/modules")
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	if len(files) == 0 {
-		log.Fatal("No kernel found")
+		return "", fmt.Errorf("No kernel found")
 	}
 
-	return (files[len(files)-1]).Name()
+	return (files[len(files)-1]).Name(), nil
 }
 
-func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
-	kernelRelease := m.kernelRelease()
+func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
+	kernelRelease, err := m.kernelRelease()
+	if err != nil {
+		return err
+	}
 
 	modules := []string{
 		"kernel/drivers/virtio/virtio.ko",
@@ -266,20 +268,23 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) {
 		"modules.devname"}
 
 	for _, v := range modules {
+		usrpath := "/lib/modules"
 		if mergedUsrSystem() {
-			w.CopyFile(path.Join("/usr/lib/modules", kernelRelease, v))
-		} else {
-			w.CopyFile(path.Join("/lib/modules", kernelRelease, v))
+			usrpath = "/usr/lib/modules"
+		}
+		if err := w.CopyFile(path.Join(usrpath, kernelRelease, v)); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples
-func (m *Machine) startup(command string, extracontent [][2]string) int {
+func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
-		log.Fatal(err)
+		return -1, err
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer os.RemoveAll(tmpdir)
@@ -288,7 +293,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) int {
 	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 
 	if err != nil {
-		log.Fatal(err)
+		return -1, err
 	}
 
 	w := writerhelper.NewWriterHelper(f)
@@ -385,7 +390,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) int {
 	w.Close()
 	f.Close()
 
-	kernelRelease := m.kernelRelease()
+	kernelRelease, err := m.kernelRelease()
+	if err != nil {
+		return -1, err
+	}
 	memory := fmt.Sprintf("%d", m.memory)
 	qemuargs := []string{"qemu-system-x86_64",
 		"-cpu", "host",
@@ -416,32 +424,35 @@ func (m *Machine) startup(command string, extracontent [][2]string) int {
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 	}
 
-	p, _ := os.StartProcess("/usr/bin/qemu-system-x86_64", qemuargs, &pa)
-	p.Wait()
+	if p, err := os.StartProcess("/usr/bin/qemu-system-x86_64", qemuargs, &pa); err != nil {
+		return -1, err
+	} else {
+		p.Wait()
+	}
 
 	result, err := os.Open(path.Join(tmpdir, "result"))
 	if err != nil {
-		log.Fatal(err)
+		return -1, err
 	}
 
 	exitstr, _ := ioutil.ReadAll(result)
 	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
 
 	if err != nil {
-		log.Fatal(err)
+		return -1, err
 	}
 
-	return exitcode
+	return exitcode, nil
 }
 
 // Run creates the machine running the given command
-func (m *Machine) Run(command string) int {
+func (m *Machine) Run(command string) (int, error) {
 	return m.startup(command, nil)
 }
 
 // RunInMachineWithArgs runs the caller binary inside the fakemachine with the
 // specified commandline arguments
-func (m *Machine) RunInMachineWithArgs(args []string) int {
+func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	name := path.Join("/", path.Base(os.Args[0]))
 
 	// FIXME: shell escaping?
@@ -450,7 +461,7 @@ func (m *Machine) RunInMachineWithArgs(args []string) int {
 	executable, err := exec.LookPath(os.Args[0])
 
 	if err != nil {
-		log.Fatalf("Failed to find executable: %v\n", err)
+		return -1, fmt.Errorf("Failed to find executable: %v\n", err)
 	}
 
 	return m.startup(command, [][2]string{{executable, name}})
@@ -458,7 +469,7 @@ func (m *Machine) RunInMachineWithArgs(args []string) int {
 
 // RunInMachine runs the caller binary inside the fakemachine with the same
 // commandline arguments as the parent
-func (m *Machine) RunInMachine() int {
+func (m *Machine) RunInMachine() (int, error) {
 	name := path.Join("/", path.Base(os.Args[0]))
 
 	// FIXME: shell escaping?
