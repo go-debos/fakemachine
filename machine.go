@@ -148,6 +148,15 @@ IgnoreSIGPIPE=no
 SendSIGHUP=yes
 `
 
+const localfs = `
+[Unit]
+Description=Local File Systems
+Documentation=man:systemd.special(7)
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=local-fs-pre.target
+`
+
 func (m *Machine) addStaticVolume(directory, label string) {
 	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
 }
@@ -375,6 +384,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	w.WriteFile("etc/systemd/system/serial-getty@ttyS0.service",
 		serviceTemplate, 0755)
+
+	w.WriteFile("/etc/systemd/system/local-fs.target", localfs, 0755)
 
 	w.WriteFile("/wrapper",
 		fmt.Sprintf(commandWrapper, command), 0755)
