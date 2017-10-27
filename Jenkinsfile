@@ -10,8 +10,8 @@ pipeline {
   stages {
     stage("Setup path") {
       steps {
-        sh "mkdir -p .gopath/src/github.com/sjoerdsimons"
-        sh "ln -sf ${env.WORKSPACE} .gopath/src/github.com/sjoerdsimons/fakemachine"
+        sh "mkdir -p .gopath/src/github.com/go-debos"
+        sh "ln -sf ${env.WORKSPACE} .gopath/src/github.com/go-debos/fakemachine"
         sh "go get -d ./..."
       }
     }

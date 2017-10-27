@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/docker/go-units"
 	"github.com/jessevdk/go-flags"
-	"github.com/sjoerdsimons/fakemachine"
+	"github.com/go-debos/fakemachine"
 	"os"
 	"strings"
 )
