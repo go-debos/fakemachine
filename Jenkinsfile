@@ -1,7 +1,7 @@
 pipeline {
   agent {
     dockerfile {
-      args '--device=/dev/kvm --group-add kvm -v /etc/group:/etc/group'
+      args '--device=/dev/kvm'
     }
   }
   environment {
@@ -18,6 +18,12 @@ pipeline {
     stage("Run test") {
       steps {
         sh "go test -v"
+      }
+    }
+
+    stage("Test build cmd") {
+      steps {
+        sh "go install github.com/go-debos/fakemachine/cmd/fakemachine"
       }
     }
   }
