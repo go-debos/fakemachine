@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/docker/go-units"
+	"github.com/go-debos/fakemachine"
 	"github.com/jessevdk/go-flags"
-	"github.com/sjoerdsimons/fakemachine"
 	"os"
 	"strings"
 )
@@ -84,7 +84,7 @@ func main() {
 	if len(args) > 0 {
 		command = strings.Join(args, " ")
 	}
-	
+
 	ret, _ := m.Run(command)
 	os.Exit(ret)
 }
