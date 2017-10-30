@@ -1,9 +1,12 @@
 package fakemachine
 
 import (
+	"bufio"
 	"flag"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -37,13 +40,56 @@ func TestImage(t *testing.T) {
 	}
 }
 
+func AssertMount(t *testing.T, mountpoint, fstype string) {
+	m, err := os.Open("/proc/self/mounts")
+	assert.Nil(t, err)
+
+	mtab := bufio.NewReader(m)
+
+	for {
+		line, err := mtab.ReadString('\n')
+		if err == io.EOF {
+			assert.Fail(t, "mountpoint not found")
+			break
+		}
+		assert.Nil(t, err)
+
+		fields := strings.Fields(line)
+		if fields[1] == mountpoint {
+			assert.Equal(t, fields[2], fstype)
+			return
+		}
+	}
+}
+
 func TestScratchTmp(t *testing.T) {
+	if InMachine() {
+		AssertMount(t, "/scratch", "tmpfs")
+		return
+	}
+
 	m := NewMachine()
 
-	exitcode, _ := m.Run("mountpoint /scratch")
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchTmp"})
 
 	if exitcode != 0 {
 		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
+	}
+}
+
+func TestScratchDisk(t *testing.T) {
+	if InMachine() {
+		AssertMount(t, "/scratch", "ext4")
+		return
+	}
+
+	m := NewMachine()
+	m.SetScratch(1024*1024*1024, "")
+
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchDisk"})
+
+	if exitcode != 0 {
+		t.Fatalf("Test for device mount on scratch failed with %d", exitcode)
 	}
 }
 
