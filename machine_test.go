@@ -1,6 +1,9 @@
 package fakemachine
 
 import (
+	"flag"
+	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -78,5 +81,38 @@ func TestSpawnMachine(t *testing.T) {
 
 	if exitcode != 0 {
 		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
+	}
+}
+
+func TestImageLabel(t *testing.T) {
+	if InMachine() {
+		t.Log("Running in the machine")
+		devices := flag.Args()
+		assert.Equal(t, len(devices), 2, "Only expected two devices")
+
+		autolabel := devices[0]
+		labeled := devices[1]
+
+		info, err := os.Stat(autolabel)
+		assert.Nil(t, err)
+		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+
+		info, err = os.Stat(labeled)
+		assert.Nil(t, err)
+		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+
+		return
+	}
+
+	m := NewMachine()
+	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
+	assert.Nil(t, err)
+
+	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
+	assert.Nil(t, err)
+
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestImageLabel", autolabel, labeled})
+	if exitcode != 0 {
+		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
 	}
 }
