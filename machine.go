@@ -29,10 +29,15 @@ type mountPoint struct {
 	label            string
 }
 
+type image struct {
+	path  string
+	label string
+}
+
 type Machine struct {
 	mounts []mountPoint
 	count  int
-	images []string
+	images []image
 	memory int
 }
 
@@ -166,37 +171,59 @@ func (m *Machine) AddVolume(directory string) {
 	m.AddVolumeAt(directory, directory)
 }
 
-// CreateImage creates an image file at path a given size and exposes it in
-// the fake machine. If size is -1 then the image should already exist and the
-// size isn't modified.
-func (m *Machine) CreateImage(path string, size int64) error {
+// CreateImageWithLabel creates an image file at path a given size and exposes
+// it in the fake machine using the given label as the serial id. If size is -1
+// then the image should already exist and the size isn't modified.
+//
+// label needs to be less then 20 characters due to limitations from qemu
+//
+// The returned string is the device path of the new image as seen inside
+// fakemachine.
+func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (string,
+	error) {
 	if size < 0 {
 		_, err := os.Stat(path)
 		if err != nil {
-			return err
+			return "", err
+		}
+	}
+
+	if len(label) >= 20 {
+		return "", fmt.Errorf("Label '%s' too long; cannot be more then 20 characters", label)
+	}
+
+	for _, image := range m.images {
+		if image.label == label {
+			return "", fmt.Errorf("Label '%s' already exists", label)
 		}
 	}
 
 	i, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if size >= 0 {
 		err = i.Truncate(size)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	i.Close()
-	m.images = append(m.images, path)
-	return nil
+	m.images = append(m.images, image{path, label})
+
+	return fmt.Sprintf("/dev/disk/by-id/virtio-%s", label), nil
 }
 
-// CreateImage creates an image file at path a given size and exposes it in
-// the fake machine. If size is -1 then the image should already exist and the
-// size isn't modified.
+// CreateImage does the same as CreateImageWithLabel but lets the library pick
+// the label.
+func (m *Machine) CreateImage(imagepath string, size int64) (string, error) {
+	label := fmt.Sprintf("fakedisk-%d", len(m.images))
+
+	return m.CreateImageWithLabel(imagepath, size, label)
+}
+
 func (m *Machine) SetMemory(memory int) {
 	m.memory = memory
 }
@@ -412,10 +439,12 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 				point.label, point.hostDirectory))
 	}
 
-	for _, image := range m.images {
+	for i, img := range m.images {
 		qemuargs = append(qemuargs, "-drive",
-			fmt.Sprintf("file=%s,if=virtio,format=raw",
-				image))
+			fmt.Sprintf("file=%s,if=none,format=raw,id=drive-virtio-disk%d", img.path, i))
+		qemuargs = append(qemuargs, "-device",
+			fmt.Sprintf("virtio-blk-pci,drive=drive-virtio-disk%d,id=virtio-disk%d,serial=%s",
+				i, i, img.label))
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
