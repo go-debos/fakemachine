@@ -10,9 +10,10 @@ import (
 )
 
 type Options struct {
-	Volumes []string `short:"v" long:"volume" description:"volume to mount"`
-	Images  []string `short:"i" long:"image" description:"image to add"`
-	Memory  int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine"`
+	Volumes     []string `short:"v" long:"volume" description:"volume to mount"`
+	Images      []string `short:"i" long:"image" description:"image to add"`
+	Memory      int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine"`
+	ScratchSize string   `short:"s" long:"scratchsize" description:"On disk scratchspace size, if unset memory backed scratch space is used"`
 }
 
 var options Options
@@ -78,6 +79,15 @@ func main() {
 	m := fakemachine.NewMachine()
 	SetupVolumes(m, options)
 	SetupImages(m, options)
+
+	if options.ScratchSize != "" {
+		size, err := units.FromHumanSize(options.ScratchSize)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Couldn't parse scratch size: %v", err)
+			os.Exit(1)
+		}
+		m.SetScratch(size, "")
+	}
 
 	if options.Memory > 0 {
 		m.SetMemory(options.Memory)
