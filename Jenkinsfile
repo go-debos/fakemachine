@@ -12,7 +12,7 @@ pipeline {
       steps {
         sh "mkdir -p .gopath/src/github.com/go-debos"
         sh "ln -sf ${env.WORKSPACE} .gopath/src/github.com/go-debos/fakemachine"
-        sh "go get -d ./..."
+        sh "go get -v -t -d ./..."
       }
     }
     stage("Run test") {

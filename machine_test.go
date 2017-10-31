@@ -1,6 +1,12 @@
 package fakemachine
 
 import (
+	"bufio"
+	"flag"
+	"github.com/stretchr/testify/assert"
+	"io"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -34,13 +40,56 @@ func TestImage(t *testing.T) {
 	}
 }
 
+func AssertMount(t *testing.T, mountpoint, fstype string) {
+	m, err := os.Open("/proc/self/mounts")
+	assert.Nil(t, err)
+
+	mtab := bufio.NewReader(m)
+
+	for {
+		line, err := mtab.ReadString('\n')
+		if err == io.EOF {
+			assert.Fail(t, "mountpoint not found")
+			break
+		}
+		assert.Nil(t, err)
+
+		fields := strings.Fields(line)
+		if fields[1] == mountpoint {
+			assert.Equal(t, fields[2], fstype)
+			return
+		}
+	}
+}
+
 func TestScratchTmp(t *testing.T) {
+	if InMachine() {
+		AssertMount(t, "/scratch", "tmpfs")
+		return
+	}
+
 	m := NewMachine()
 
-	exitcode, _ := m.Run("mountpoint /scratch")
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchTmp"})
 
 	if exitcode != 0 {
 		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
+	}
+}
+
+func TestScratchDisk(t *testing.T) {
+	if InMachine() {
+		AssertMount(t, "/scratch", "ext4")
+		return
+	}
+
+	m := NewMachine()
+	m.SetScratch(1024*1024*1024, "")
+
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchDisk"})
+
+	if exitcode != 0 {
+		t.Fatalf("Test for device mount on scratch failed with %d", exitcode)
 	}
 }
 
@@ -78,5 +127,38 @@ func TestSpawnMachine(t *testing.T) {
 
 	if exitcode != 0 {
 		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
+	}
+}
+
+func TestImageLabel(t *testing.T) {
+	if InMachine() {
+		t.Log("Running in the machine")
+		devices := flag.Args()
+		assert.Equal(t, len(devices), 2, "Only expected two devices")
+
+		autolabel := devices[0]
+		labeled := devices[1]
+
+		info, err := os.Stat(autolabel)
+		assert.Nil(t, err)
+		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+
+		info, err = os.Stat(labeled)
+		assert.Nil(t, err)
+		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+
+		return
+	}
+
+	m := NewMachine()
+	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
+	assert.Nil(t, err)
+
+	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
+	assert.Nil(t, err)
+
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestImageLabel", autolabel, labeled})
+	if exitcode != 0 {
+		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
 	}
 }

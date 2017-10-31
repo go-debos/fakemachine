@@ -29,11 +29,21 @@ type mountPoint struct {
 	label            string
 }
 
+type image struct {
+	path  string
+	label string
+}
+
 type Machine struct {
 	mounts []mountPoint
 	count  int
-	images []string
+	images []image
 	memory int
+
+	scratchsize int64
+	scratchpath string
+	scratchfile string
+	scratchdev  string
 }
 
 // Create a new machine object
@@ -175,45 +185,86 @@ func (m *Machine) AddVolume(directory string) {
 	m.AddVolumeAt(directory, directory)
 }
 
-// CreateImage creates an image file at path a given size and exposes it in
-// the fake machine. If size is -1 then the image should already exist and the
-// size isn't modified.
-func (m *Machine) CreateImage(path string, size int64) error {
+// CreateImageWithLabel creates an image file at path a given size and exposes
+// it in the fake machine using the given label as the serial id. If size is -1
+// then the image should already exist and the size isn't modified.
+//
+// label needs to be less then 20 characters due to limitations from qemu
+//
+// The returned string is the device path of the new image as seen inside
+// fakemachine.
+func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (string,
+	error) {
 	if size < 0 {
 		_, err := os.Stat(path)
 		if err != nil {
-			return err
+			return "", err
+		}
+	}
+
+	if len(label) >= 20 {
+		return "", fmt.Errorf("Label '%s' too long; cannot be more then 20 characters", label)
+	}
+
+	for _, image := range m.images {
+		if image.label == label {
+			return "", fmt.Errorf("Label '%s' already exists", label)
 		}
 	}
 
 	i, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if size >= 0 {
 		err = i.Truncate(size)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	i.Close()
-	m.images = append(m.images, path)
-	return nil
+	m.images = append(m.images, image{path, label})
+
+	return fmt.Sprintf("/dev/disk/by-id/virtio-%s", label), nil
 }
 
-// CreateImage creates an image file at path a given size and exposes it in
-// the fake machine. If size is -1 then the image should already exist and the
-// size isn't modified.
+// CreateImage does the same as CreateImageWithLabel but lets the library pick
+// the label.
+func (m *Machine) CreateImage(imagepath string, size int64) (string, error) {
+	label := fmt.Sprintf("fakedisk-%d", len(m.images))
+
+	return m.CreateImageWithLabel(imagepath, size, label)
+}
+
+// SetMemory sets the fakemachines amount of memory (in megabytes). Defaults to
+// 2048 MB
 func (m *Machine) SetMemory(memory int) {
 	m.memory = memory
+}
+
+// SetScratch sets the size and location of on-disk scratch space to allocate
+// (sparsely) for /scratch. If not set /scratch will be backed by memory. If
+// Path is "" then the working directory is used as a default storage location
+func (m *Machine) SetScratch(scratchsize int64, path string) {
+	m.scratchsize = scratchsize
+	if path == "" {
+		m.scratchpath, _ = os.Getwd()
+	} else {
+		m.scratchpath = path
+	}
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
-	fstab = append(fstab, "none /scratch tmpfs size=95% 0 0")
+	if m.scratchfile == "" {
+		fstab = append(fstab, "none /scratch tmpfs size=95% 0 0")
+	} else {
+		fstab = append(fstab, fmt.Sprintf("%s /scratch ext4 defaults,relatime 0 0",
+			m.scratchdev))
+	}
 
 	for _, point := range m.mounts {
 		fstab = append(fstab,
@@ -288,15 +339,51 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 	return nil
 }
 
+func (m *Machine) setupscratch() error {
+	if m.scratchsize == 0 {
+		return nil
+	}
+
+	tmpfile, err := ioutil.TempFile(m.scratchpath, "fake-scratch.img.")
+	if err != nil {
+		return err
+	}
+	m.scratchfile = tmpfile.Name()
+
+	m.scratchdev, err = m.CreateImageWithLabel(tmpfile.Name(), m.scratchsize, "fake-scratch")
+	if err != nil {
+		return err
+	}
+	mkfs := exec.Command("mkfs.ext4", "-q", tmpfile.Name())
+	err = mkfs.Run()
+
+	return err
+}
+
+func (m *Machine) cleanup() {
+	if m.scratchfile != "" {
+		os.Remove(m.scratchfile)
+	}
+
+	m.scratchfile = ""
+}
+
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples
 func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
+	defer m.cleanup()
+
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
 		return -1, err
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer os.RemoveAll(tmpdir)
+
+	err = m.setupscratch()
+	if err != nil {
+		return -1, err
+	}
 
 	InitrdPath := path.Join(tmpdir, "initramfs.cpio")
 	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
@@ -423,10 +510,12 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 				point.label, point.hostDirectory))
 	}
 
-	for _, image := range m.images {
+	for i, img := range m.images {
 		qemuargs = append(qemuargs, "-drive",
-			fmt.Sprintf("file=%s,if=virtio,format=raw",
-				image))
+			fmt.Sprintf("file=%s,if=none,format=raw,id=drive-virtio-disk%d", img.path, i))
+		qemuargs = append(qemuargs, "-device",
+			fmt.Sprintf("virtio-blk-pci,drive=drive-virtio-disk%d,id=virtio-disk%d,serial=%s",
+				i, i, img.label))
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
