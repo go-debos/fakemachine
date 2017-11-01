@@ -39,6 +39,11 @@ type Machine struct {
 	count  int
 	images []image
 	memory int
+
+	scratchsize int64
+	scratchpath string
+	scratchfile string
+	scratchdev  string
 }
 
 // Create a new machine object
@@ -224,14 +229,33 @@ func (m *Machine) CreateImage(imagepath string, size int64) (string, error) {
 	return m.CreateImageWithLabel(imagepath, size, label)
 }
 
+// SetMemory sets the fakemachines amount of memory (in megabytes). Defaults to
+// 2048 MB
 func (m *Machine) SetMemory(memory int) {
 	m.memory = memory
+}
+
+// SetScratch sets the size and location of on-disk scratch space to allocate
+// (sparsely) for /scratch. If not set /scratch will be backed by memory. If
+// Path is "" then the working directory is used as a default storage location
+func (m *Machine) SetScratch(scratchsize int64, path string) {
+	m.scratchsize = scratchsize
+	if path == "" {
+		m.scratchpath, _ = os.Getwd()
+	} else {
+		m.scratchpath = path
+	}
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
-	fstab = append(fstab, "none /scratch tmpfs size=95% 0 0")
+	if m.scratchfile == "" {
+		fstab = append(fstab, "none /scratch tmpfs size=95% 0 0")
+	} else {
+		fstab = append(fstab, fmt.Sprintf("%s /scratch ext4 defaults,relatime 0 0",
+			m.scratchdev))
+	}
 
 	for _, point := range m.mounts {
 		fstab = append(fstab,
@@ -306,15 +330,51 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 	return nil
 }
 
+func (m *Machine) setupscratch() error {
+	if m.scratchsize == 0 {
+		return nil
+	}
+
+	tmpfile, err := ioutil.TempFile(m.scratchpath, "fake-scratch.img.")
+	if err != nil {
+		return err
+	}
+	m.scratchfile = tmpfile.Name()
+
+	m.scratchdev, err = m.CreateImageWithLabel(tmpfile.Name(), m.scratchsize, "fake-scratch")
+	if err != nil {
+		return err
+	}
+	mkfs := exec.Command("mkfs.ext4", "-q", tmpfile.Name())
+	err = mkfs.Run()
+
+	return err
+}
+
+func (m *Machine) cleanup() {
+	if m.scratchfile != "" {
+		os.Remove(m.scratchfile)
+	}
+
+	m.scratchfile = ""
+}
+
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples
 func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
+	defer m.cleanup()
+
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
 		return -1, err
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer os.RemoveAll(tmpdir)
+
+	err = m.setupscratch()
+	if err != nil {
+		return -1, err
+	}
 
 	InitrdPath := path.Join(tmpdir, "initramfs.cpio")
 	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
