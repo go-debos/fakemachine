@@ -3,6 +3,7 @@ package fakemachine
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -323,8 +324,13 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 		if mergedUsrSystem() {
 			usrpath = "/usr/lib/modules"
 		}
-		if err := w.CopyFile(path.Join(usrpath, kernelRelease, v)); err != nil {
-			return err
+		log.Printf("Getting module from host %s", v)
+		if (!strings.HasPrefix(v, "kernel/drivers/virtio")) {
+			if err := w.CopyFile(path.Join(usrpath, kernelRelease, v)); err != nil {
+				return err
+			}
+		} else {
+			log.Printf("Ignoring %s", v)
 		}
 	}
 	return nil
