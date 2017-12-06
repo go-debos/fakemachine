@@ -501,7 +501,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	for i, img := range m.images {
 		qemuargs = append(qemuargs, "-drive",
-			fmt.Sprintf("file=%s,if=none,format=raw,id=drive-virtio-disk%d", img.path, i))
+			fmt.Sprintf("file=%s,if=none,format=raw,cache=unsafe,id=drive-virtio-disk%d", img.path, i))
 		qemuargs = append(qemuargs, "-device",
 			fmt.Sprintf("virtio-blk-pci,drive=drive-virtio-disk%d,id=virtio-disk%d,serial=%s",
 				i, i, img.label))
