@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,6 +40,7 @@ type Machine struct {
 	count  int
 	images []image
 	memory int
+	numcpus int
 
 	scratchsize int64
 	scratchpath string
@@ -48,7 +50,7 @@ type Machine struct {
 
 // Create a new machine object
 func NewMachine() (m *Machine) {
-	m = &Machine{memory: 2048}
+	m = &Machine{memory: 2048, numcpus: runtime.NumCPU()}
 	// usr is mounted by specific label via /init
 	m.addStaticVolume("/usr", "usr")
 
@@ -233,6 +235,12 @@ func (m *Machine) CreateImage(imagepath string, size int64) (string, error) {
 // 2048 MB
 func (m *Machine) SetMemory(memory int) {
 	m.memory = memory
+}
+
+// SetNumCPUs sets the number of CPUs exposed to the fakemachine. Defaults to
+// the number of available cores in the system.
+func (m *Machine) SetNumCPUs(numcpus int) {
+	m.numcpus = numcpus
 }
 
 // SetScratch sets the size and location of on-disk scratch space to allocate
@@ -482,9 +490,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 	memory := fmt.Sprintf("%d", m.memory)
+	numcpus := fmt.Sprintf("%d", m.numcpus)
 	qemuargs := []string{"qemu-system-x86_64",
 		"-cpu", "host",
-		"-smp", "2",
+		"-smp", numcpus,
 		"-m", memory,
 		"-enable-kvm",
 		"-kernel", "/boot/vmlinuz-" + kernelRelease,

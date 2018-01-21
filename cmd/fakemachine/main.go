@@ -13,6 +13,7 @@ type Options struct {
 	Volumes     []string `short:"v" long:"volume" description:"volume to mount"`
 	Images      []string `short:"i" long:"image" description:"image to add"`
 	Memory      int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine"`
+	CPUs        int      `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string   `short:"s" long:"scratchsize" description:"On disk scratchspace size, if unset memory backed scratch space is used"`
 }
 
@@ -91,6 +92,10 @@ func main() {
 
 	if options.Memory > 0 {
 		m.SetMemory(options.Memory)
+	}
+
+	if options.CPUs > 0 {
+		m.SetNumCPUs(options.CPUs)
 	}
 
 	command := "/bin/bash"
