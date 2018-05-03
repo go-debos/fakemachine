@@ -168,6 +168,12 @@ func (m *Machine) addStaticVolume(directory, label string) {
 // fake machine
 func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 	label := fmt.Sprintf("virtfs-%d", m.count)
+	for _, mount := range m.mounts {
+		if mount.hostDirectory == hostDirectory && mount.machineDirectory == machineDirectory {
+			// Do not need to add already existing mount
+			return
+		}
+	}
 	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
 	m.count = m.count + 1
 }
