@@ -130,6 +130,17 @@ LinkLocalAddressing=no
 IPv6AcceptRA=no
 `
 const commandWrapper = `#!/bin/sh
+/lib/systemd/systemd-networkd-wait-online -q
+if [ $? != 0 ]; then
+  echo "WARNING: Network setup failed"
+  echo "== Journal =="
+  journalctl -a --no-pager
+  echo "== networkd =="
+  networkctl status
+  networkctl list
+  echo 1 > /run/fakemachine/result
+  exit
+fi
 
 echo Running '%[1]s'
 %[1]s
@@ -141,8 +152,8 @@ const serviceTemplate = `
 Description=fakemachine runner
 Conflicts=shutdown.target
 Before=shutdown.target
-Requires=systemd-networkd-wait-online.service
-After=systemd-networkd-wait-online.service
+Wants=systemd-networkd.service
+After=systemd-networkd.service
 
 [Service]
 Environment=HOME=/root IN_FAKE_MACHINE=yes
