@@ -474,8 +474,13 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	m.writerKernelModules(w)
 
-	w.WriteFile("etc/systemd/system/serial-getty@ttyS0.service",
+	w.WriteFile("etc/systemd/system/fakemachine.service",
 		serviceTemplate, 0755)
+
+	w.WriteSymlink(
+		"/lib/systemd/system/serial-getty@ttyS0.service",
+		"/dev/null",
+		0755)
 
 	w.WriteFile("/wrapper",
 		fmt.Sprintf(commandWrapper, command), 0755)
@@ -506,7 +511,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"-initrd", InitrdPath,
 		"-nographic",
 		"-no-reboot"}
-	kernelargs := []string{"console=ttyS0", "quiet", "panic=-1"}
+	kernelargs := []string{"console=ttyS0", "quiet", "panic=-1",
+		"systemd.unit=fakemachine.service"}
 
 	for _, point := range m.mounts {
 		qemuargs = append(qemuargs, "-virtfs",
