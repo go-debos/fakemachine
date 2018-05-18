@@ -36,10 +36,10 @@ type image struct {
 }
 
 type Machine struct {
-	mounts []mountPoint
-	count  int
-	images []image
-	memory int
+	mounts  []mountPoint
+	count   int
+	images  []image
+	memory  int
 	numcpus int
 
 	scratchsize int64
@@ -118,7 +118,6 @@ if ! busybox test -L /bin ; then
 fi
 exec /lib/systemd/systemd
 `
-
 const networkd = `
 [Match]
 Name=e*
