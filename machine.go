@@ -151,8 +151,8 @@ const serviceTemplate = `
 Description=fakemachine runner
 Conflicts=shutdown.target
 Before=shutdown.target
-Wants=systemd-networkd.service
-After=systemd-networkd.service
+Wants=systemd-resolved.service binfmt-support.service systemd-networkd.service
+After=systemd-resolved.service binfmt-support.service systemd-networkd.service
 
 [Service]
 Environment=HOME=/root IN_FAKE_MACHINE=yes
@@ -461,25 +461,6 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.WriteSymlink(
 		"/lib/systemd/resolv.conf",
 		"/etc/resolv.conf",
-		0755)
-	w.WriteSymlink(
-		"/lib/systemd/system/systemd-networkd.service",
-		"/etc/systemd/system/multi-user.target.wants/systemd-networkd.service",
-		0755)
-
-	w.WriteSymlink(
-		"/lib/systemd/system/systemd-resolved.service",
-		"/etc/systemd/system/multi-user.target.wants/systemd-resolved.service",
-		0755)
-
-	w.WriteSymlink(
-		"/lib/systemd/system/systemd-networkd.socket",
-		"/etc/systemd/system/sockets.target.wants/systemd-networkd.socket",
-		0755)
-
-	w.WriteSymlink(
-		"/lib/systemd/system/binfmt-support.service",
-		"/etc/systemd/system/multi-user.target.wants/binfmt-support.service",
 		0755)
 
 	m.writerKernelModules(w)
