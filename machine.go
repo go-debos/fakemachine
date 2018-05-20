@@ -151,8 +151,9 @@ const serviceTemplate = `
 Description=fakemachine runner
 Conflicts=shutdown.target
 Before=shutdown.target
+Requires=basic.target
 Wants=systemd-resolved.service binfmt-support.service systemd-networkd.service
-After=systemd-resolved.service binfmt-support.service systemd-networkd.service
+After=basic.target systemd-resolved.service binfmt-support.service systemd-networkd.service
 
 [Service]
 Environment=HOME=/root IN_FAKE_MACHINE=yes
