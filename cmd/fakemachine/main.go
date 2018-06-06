@@ -84,7 +84,7 @@ func main() {
 	if options.ScratchSize != "" {
 		size, err := units.FromHumanSize(options.ScratchSize)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Couldn't parse scratch size: %v", err)
+			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse scratch size: %v\n", err)
 			os.Exit(1)
 		}
 		m.SetScratch(size, "")
