@@ -103,6 +103,9 @@ func main() {
 		command = strings.Join(args, " ")
 	}
 
-	ret, _ := m.Run(command)
+	ret, err := m.Run(command)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
+	}
 	os.Exit(ret)
 }
