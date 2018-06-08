@@ -110,11 +110,11 @@ busybox modprobe virtio_pci
 busybox modprobe 9pnet_virtio
 busybox modprobe 9p
 
-busybox mount -v -t 9p -o trans=virtio,version=9p2000.L usr /usr
+busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 usr /usr
 if ! busybox test -L /bin ; then
-	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L sbin /sbin
-	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L bin /bin
-	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L lib /lib
+	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 sbin /sbin
+	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 bin /bin
+	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 lib /lib
 fi
 exec /lib/systemd/systemd
 `
@@ -284,7 +284,7 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 
 	for _, point := range m.mounts {
 		fstab = append(fstab,
-			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L 0 0",
+			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L,cache=loose,msize=262144 0 0",
 				point.label, point.machineDirectory))
 	}
 	fstab = append(fstab, "")
