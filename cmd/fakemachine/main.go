@@ -15,6 +15,7 @@ type Options struct {
 	Memory      int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
 	CPUs        int      `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string   `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
+	ShowBoot    bool     `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 }
 
 var options Options
@@ -78,6 +79,7 @@ func main() {
 	}
 
 	m := fakemachine.NewMachine()
+	m.SetShowBoot(options.ShowBoot)
 	SetupVolumes(m, options)
 	SetupImages(m, options)
 
