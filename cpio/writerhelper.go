@@ -109,7 +109,7 @@ func (w *WriterHelper) CopyTree(path string) {
 		} else if info.Mode().IsRegular() {
 			w.CopyFile(p)
 		} else {
-			panic("No handled")
+			log.Printf("Ignored link: %s/%s", path, p);
 		}
 
 		return nil
