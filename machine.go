@@ -1,11 +1,12 @@
 // +build linux
-// +build amd64
+// +build 386 amd64 arm64 ppc64 ppc64le mips mipsle mips64 mips64le s390x
 
 package fakemachine
 
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -441,11 +442,67 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	if mergedUsrSystem() {
 		prefix = "/usr"
 	}
-	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libc.so.6")
-	w.CopyFile(prefix + "/bin/busybox")
 
-	/* Amd64 dynamic linker */
-	w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+	qemu := ""
+
+	// Useful references:
+	// https://salsa.debian.org/go-team/compiler/golang/blob/golang-1.10/debian/helpers/goenv.sh
+	// https://sourceware.org/glibc/wiki/ABIList
+	switch runtime.GOARCH {
+	case "386":
+		qemu = "qemu-system-i386"
+		w.CopyFile(prefix + "/lib/i386-linux-gnu/libc.so.6")
+		w.CopyFile("/lib/ld-linux.so.2")
+	case "amd64":
+		qemu = "qemu-system-x86_64"
+		w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libc.so.6")
+		w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+	case "arm":
+		// Assume Debian armhf ABI
+		qemu = "qemu-system-arm"
+		w.CopyFile(prefix + "/lib/arm-linux-gnueabihf/libc.so.6")
+		w.CopyFile("/lib/ld-linux-armhf.so.3")
+	case "arm64":
+		qemu = "qemu-system-aarch64"
+		w.CopyFile(prefix + "/lib/aarch64-linux-gnu/libc.so.6")
+		w.CopyFile("/lib/ld-linux-aarch64.so.1")
+	case "ppc64":
+		qemu = "qemu-system-ppc64"
+		w.CopyFile(prefix + "/lib/powerpc64-linux-gnu/libc.so.6")
+		w.CopyFile("/lib/ld64.so.1")
+	case "ppc64le":
+		qemu = "qemu-system-ppc64le"
+		w.CopyFile(prefix + "/lib/powerpc64le-linux-gnu/libc.so.6")
+		w.CopyFile("/lib/ld64.so.2")
+	case "mips":
+		// Assume Debian mips ABI
+		qemu = "qemu-system-mips"
+		w.CopyFile(prefix + "/lib/mips-linux-gnu/libc.so.6")
+		w.CopyFile("/lib/ld.so.1")
+	case "mipsle":
+		// Assume Debian mipsel ABI
+		qemu = "qemu-system-mipsel"
+		w.CopyFile(prefix + "/lib/mipsel-linux-gnu/libc.so.6")
+		w.CopyFile("/lib/ld.so.1")
+	case "mips64":
+		// Assume Debian mips64 ABI
+		qemu = "qemu-system-mips64"
+		w.CopyFile(prefix + "/lib/mips64-linux-gnuabi64/libc.so.6")
+		w.CopyFile("/lib64/ld.so.1")
+	case "mips64le":
+		// Assume Debian mips64le ABI
+		qemu = "qemu-system-mips64el"
+		w.CopyFile(prefix + "/lib/mips64el-linux-gnuabi64/libc.so.6")
+		w.CopyFile("/lib64/ld.so.1")
+	case "s390x":
+		qemu = "qemu-system-s390x"
+		w.CopyFile(prefix + "/lib/s390x-linux-gnu/libc.so.6")
+		w.CopyFile("/lib64/ld.so.1")
+	default:
+		log.Panicf("Unsupported CPU %s", runtime.GOARCH)
+	}
+
+	w.CopyFile(prefix + "/bin/busybox")
 
 	w.WriteCharDevice("/dev/console", 5, 1, 0700)
 
@@ -497,7 +554,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
-	qemuargs := []string{"qemu-system-x86_64",
+	qemuargs := []string{qemu,
 		"-cpu", "host",
 		"-smp", numcpus,
 		"-m", memory,
@@ -529,7 +586,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 	}
 
-	if p, err := os.StartProcess("/usr/bin/qemu-system-x86_64", qemuargs, &pa); err != nil {
+	if p, err := os.StartProcess("/usr/bin/" + qemu, qemuargs, &pa); err != nil {
 		return -1, err
 	} else {
 		p.Wait()
