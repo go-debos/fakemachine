@@ -536,7 +536,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		// Linux and systemd, and is also connected to the
 		// fakemachine script) to that device
 		qemuargs = append(qemuargs,
-			"-chardev", "stdio,id=for-ttyS0",
+			"-chardev", "stdio,id=for-ttyS0,signal=off",
 			"-serial", "chardev:for-ttyS0")
 	} else {
 		qemuargs = append(qemuargs,
@@ -554,7 +554,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 			"-device", "virtconsole,chardev=for-hvc0",
 			// Connect the fakemachine script to our stdio
 			// file descriptors
-			"-chardev", "stdio,id=for-hvc1",
+			"-chardev", "stdio,id=for-hvc1,signal=off",
 			"-device", "virtconsole,chardev=for-hvc1")
 	}
 
