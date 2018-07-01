@@ -490,7 +490,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, tty), 0755)
+		fmt.Sprintf(serviceTemplate, tty), 0644)
 
 	w.WriteSymlink(
 		"/lib/systemd/system/serial-getty@ttyS0.service",
