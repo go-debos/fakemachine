@@ -482,7 +482,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	// reserving /dev/ttyS0 for boot messages (which we ignore)
 	// and /dev/hvc0 for possible use by systemd as a getty
 	// (which we also ignore).
-	tty := "/dev/hvc1"
+	tty := "/dev/hvc0"
 	if m.showBoot {
 		// If we are debugging a failing boot, mix job output into
 		// the normal console messages instead, so we can see both.
@@ -547,15 +547,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 			// doesn't corrupt our terminal
 			"-chardev", "null,id=for-ttyS0",
 			"-serial", "chardev:for-ttyS0",
-			// Reserve /dev/hvc0 to be the system console
-			// (some versions of systemd automatically put
-			// a serial getty there) but ignore it
-			"-chardev", "null,id=for-hvc0",
-			"-device", "virtconsole,chardev=for-hvc0",
 			// Connect the fakemachine script to our stdio
 			// file descriptors
-			"-chardev", "stdio,id=for-hvc1,signal=off",
-			"-device", "virtconsole,chardev=for-hvc1")
+			"-chardev", "stdio,id=for-hvc0,signal=off",
+			"-device", "virtconsole,chardev=for-hvc0")
 	}
 
 	for _, point := range m.mounts {
