@@ -526,7 +526,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"-initrd", InitrdPath,
 		"-display", "none",
 		"-no-reboot"}
-	kernelargs := []string{"console=ttyS0", "quiet", "panic=-1",
+	kernelargs := []string{"console=ttyS0", "panic=-1",
 		"systemd.unit=fakemachine.service"}
 
 	if m.showBoot {
