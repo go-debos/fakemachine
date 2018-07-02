@@ -15,11 +15,16 @@ type Options struct {
 	Memory      int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
 	CPUs        int      `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string   `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
+	QemuOpts    []string `short:"q" long:"qemuopts" description:"Additional Qemu options"`
 	ShowBoot    bool     `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 }
 
 var options Options
 var parser = flags.NewParser(&options, flags.Default)
+
+func SetupQemuOpts(m *fakemachine.Machine, options Options) {
+	m.AddQemuOpts(options.QemuOpts)
+}
 
 func SetupVolumes(m *fakemachine.Machine, options Options) {
 	for _, v := range options.Volumes {
@@ -82,6 +87,7 @@ func main() {
 	m.SetShowBoot(options.ShowBoot)
 	SetupVolumes(m, options)
 	SetupImages(m, options)
+	SetupQemuOpts(m,options)
 
 	if options.ScratchSize != "" {
 		size, err := units.FromHumanSize(options.ScratchSize)
