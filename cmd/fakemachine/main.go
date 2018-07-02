@@ -16,6 +16,7 @@ type Options struct {
 	CPUs        int      `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string   `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	QemuOpts    []string `short:"q" long:"qemuopts" description:"Additional Qemu options"`
+	ShowBoot    bool     `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 }
 
 var options Options
@@ -84,6 +85,7 @@ func main() {
 	}
 
 	m := fakemachine.NewMachine()
+	m.SetShowBoot(options.ShowBoot)
 	SetupVolumes(m, options)
 	SetupImages(m, options)
 	SetupQemuOpts(m,options)
