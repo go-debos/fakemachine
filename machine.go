@@ -39,17 +39,18 @@ type image struct {
 }
 
 type Machine struct {
-	mounts  []mountPoint
-	count   int
-	images  []image
-	memory  int
-	numcpus int
+	mounts   []mountPoint
+	count    int
+	images   []image
+	memory   int
+	numcpus  int
 	showBoot bool
 
 	scratchsize int64
 	scratchpath string
 	scratchfile string
 	scratchdev  string
+	qemuopts    []string
 }
 
 // Create a new machine object
@@ -199,6 +200,11 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 // fake machine
 func (m *Machine) AddVolume(directory string) {
 	m.AddVolumeAt(directory, directory)
+}
+
+// Add Qemu display options
+func (m *Machine) AddQemuOpts(qemuopts []string) {
+	m.qemuopts = qemuopts
 }
 
 // CreateImageWithLabel creates an image file at path a given size and exposes
@@ -565,6 +571,13 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		qemuargs = append(qemuargs, "-device",
 			fmt.Sprintf("virtio-blk-pci,drive=drive-virtio-disk%d,id=virtio-disk%d,serial=%s",
 				i, i, img.label))
+	}
+
+	if m.qemuopts != nil {
+		keyval := strings.Fields(m.qemuopts[0])
+		for _, v := range keyval {
+			qemuargs = append(qemuargs, v)
+		}
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
