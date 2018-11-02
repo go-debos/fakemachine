@@ -152,7 +152,7 @@ echo Running '%[1]s'
 echo $? > /run/fakemachine/result
 `
 
-// The line 'Environment=%[2]s' is used for environemnt variables optionally
+// The line 'Environment=%[2]s' is used for environment variables optionally
 // configured using Machine.SetEnviron()
 const serviceTemplate = `
 [Unit]
