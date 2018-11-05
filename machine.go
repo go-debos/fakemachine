@@ -164,8 +164,7 @@ Wants=systemd-resolved.service binfmt-support.service systemd-networkd.service
 After=basic.target systemd-resolved.service binfmt-support.service systemd-networkd.service
 
 [Service]
-Environment=HOME=/root IN_FAKE_MACHINE=yes
-Environment=%[2]s
+Environment=HOME=/root IN_FAKE_MACHINE=yes %[2]s
 WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
