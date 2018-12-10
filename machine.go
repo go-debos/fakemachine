@@ -162,6 +162,7 @@ Before=shutdown.target
 Requires=basic.target
 Wants=systemd-resolved.service binfmt-support.service systemd-networkd.service
 After=basic.target systemd-resolved.service binfmt-support.service systemd-networkd.service
+OnFailure=poweroff.target
 
 [Service]
 Environment=HOME=/root IN_FAKE_MACHINE=yes %[2]s
@@ -169,7 +170,6 @@ WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
 ExecStopPost=/bin/systemctl poweroff -ff
-OnFailure=poweroff.target
 Type=idle
 TTYPath=%[1]s
 StandardInput=tty-force
