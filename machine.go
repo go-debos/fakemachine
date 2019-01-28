@@ -352,10 +352,19 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 		"modules.builtin.bin",
 		"modules.devname"}
 
+	usrpath := "/lib/modules"
+	if mergedUsrSystem() {
+		usrpath = "/usr/lib/modules"
+	}
+	builtins := ""
+	data, err := ioutil.ReadFile(path.Join(usrpath, kernelRelease, "modules.builtin"))
+	if err == nil {
+		builtins = string(data)
+	}
+
 	for _, v := range modules {
-		usrpath := "/lib/modules"
-		if mergedUsrSystem() {
-			usrpath = "/usr/lib/modules"
+		if strings.Contains(builtins, v) {
+			continue
 		}
 		if err := w.CopyFile(path.Join(usrpath, kernelRelease, v)); err != nil {
 			return err
