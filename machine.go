@@ -178,6 +178,7 @@ StandardError=inherit
 KillMode=process
 IgnoreSIGPIPE=no
 SendSIGHUP=yes
+LimitNOFILE=4096
 `
 
 func (m *Machine) addStaticVolume(directory, label string) {
