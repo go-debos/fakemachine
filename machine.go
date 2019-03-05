@@ -458,6 +458,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	if mergedUsrSystem() {
 		prefix = "/usr"
 	}
+	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libresolv.so.2")
 	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libc.so.6")
 	w.CopyFile(prefix + "/bin/busybox")
 
