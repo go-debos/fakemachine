@@ -39,13 +39,13 @@ type image struct {
 }
 
 type Machine struct {
-	mounts  []mountPoint
-	count   int
-	images  []image
-	memory  int
-	numcpus int
+	mounts   []mountPoint
+	count    int
+	images   []image
+	memory   int
+	numcpus  int
 	showBoot bool
-	Environ []string
+	Environ  []string
 
 	scratchsize int64
 	scratchpath string
