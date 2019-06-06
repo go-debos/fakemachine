@@ -4,6 +4,7 @@
 package fakemachine
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,9 +13,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/go-debos/fakemachine/cpio"
+	"golang.org/x/sys/unix"
 )
 
 func mergedUsrSystem() bool {
@@ -90,20 +91,6 @@ func InMachine() (ret bool) {
 func Supported() bool {
 	_, err := os.Stat("/dev/kvm")
 	return err == nil
-}
-
-func charsToString(in []int8) string {
-	s := make([]byte, len(in))
-
-	i := 0
-	for ; i < len(in); i++ {
-		if in[i] == 0 {
-			break
-		}
-		s[i] = byte(in[i])
-	}
-
-	return string(s[0:i])
 }
 
 const initScript = `#!/bin/busybox sh
@@ -316,9 +303,11 @@ func (m *Machine) kernelRelease() (string, error) {
 	 * modules for that try the latest from /lib/modules. The former works best
 	 * for systems direclty running fakemachine, the latter makes sense in docker
 	 * environments */
-	var u syscall.Utsname
-	syscall.Uname(&u)
-	release := charsToString(u.Release[:])
+	var u unix.Utsname
+	if err := unix.Uname(&u); err != nil {
+		return "", err
+	}
+	release := string(u.Release[:bytes.IndexByte(u.Release[:], 0)])
 
 	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
 		return release, nil
