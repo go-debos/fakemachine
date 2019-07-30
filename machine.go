@@ -4,6 +4,7 @@
 package fakemachine
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -351,6 +352,49 @@ func (m *Machine) kernelRelease() (string, error) {
 	return (files[len(files)-1]).Name(), nil
 }
 
+func (m *Machine) kernelPath(kernelRelease string) (string, error) {
+	kernelDir := "/boot"
+
+	/* First, try to find a kernel with a well-known name */
+	path := filepath.Join(kernelDir, "vmlinuz-" + kernelRelease)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+
+	/* Otherwise, inspect each kernel installed, and look for the release
+	 * string straight in the binary. Not pretty, but it works. */
+	needle := kernelRelease
+	if !strings.HasSuffix(needle, " ") {
+		needle += " "
+	}
+
+	files, err := ioutil.ReadDir(kernelDir)
+	if err != nil {
+		return "", err
+	}
+
+	for _, f := range files {
+		if !strings.HasPrefix(f.Name(), "vmlinuz-") || f.IsDir() {
+			continue
+		}
+
+		path := filepath.Join(kernelDir, f.Name())
+		buf, err := ioutil.ReadFile(path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Failed to read kernel:", err)
+			continue
+		}
+
+		if !bytes.Contains(buf, []byte(needle)) {
+			continue
+		}
+
+		return path, nil
+	}
+
+	return "", fmt.Errorf("No kernel found for release %s", kernelRelease)
+}
+
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 	kernelRelease, err := m.kernelRelease()
 	if err != nil {
@@ -544,6 +588,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	if err != nil {
 		return -1, err
 	}
+	KernelPath, err := m.kernelPath(kernelRelease)
+	if err != nil {
+		return -1, err
+	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
 	qemuargs := []string{"qemu-system-x86_64",
@@ -551,7 +599,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"-smp", numcpus,
 		"-m", memory,
 		"-enable-kvm",
-		"-kernel", "/boot/vmlinuz-" + kernelRelease,
+		"-kernel", KernelPath,
 		"-initrd", InitrdPath,
 		"-display", "none",
 		"-no-reboot"}
