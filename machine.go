@@ -71,8 +71,10 @@ func NewMachine() (m *Machine) {
 
 	// Dbus configuration
 	m.AddVolume("/etc/dbus-1")
-	// Alternative symlinks
-	m.AddVolume("/etc/alternatives")
+	// Debian alternative symlinks
+	if _, err := os.Stat("/etc/alternatives"); err == nil {
+		m.AddVolume("/etc/alternatives")
+	}
 	// Debians binfmt registry
 	if _, err := os.Stat("/var/lib/binfmts"); err == nil {
 		m.AddVolume("/var/lib/binfmts")
