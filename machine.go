@@ -352,12 +352,13 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 		"modules.builtin.bin",
 		"modules.devname"}
 
+	moddir := "/lib/modules"
+	if mergedUsrSystem() {
+		moddir = "/usr/lib/modules"
+	}
+
 	for _, v := range modules {
-		usrpath := "/lib/modules"
-		if mergedUsrSystem() {
-			usrpath = "/usr/lib/modules"
-		}
-		if err := w.CopyFile(path.Join(usrpath, kernelRelease, v)); err != nil {
+		if err := w.CopyFile(path.Join(moddir, kernelRelease, v)); err != nil {
 			return err
 		}
 	}
