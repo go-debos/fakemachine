@@ -320,7 +320,7 @@ func (m *Machine) SetEnviron(environ []string) {
 func (m *Machine) kernelRelease() (string, error) {
 	/* First try the kernel the current system is running, but if there are no
 	 * modules for that try the latest from /lib/modules. The former works best
-	 * for systems direclty running fakemachine, the latter makes sense in docker
+	 * for systems directly running fakemachine, the latter makes sense in docker
 	 * environments */
 	var u syscall.Utsname
 	syscall.Uname(&u)
@@ -335,11 +335,16 @@ func (m *Machine) kernelRelease() (string, error) {
 		return "", err
 	}
 
-	if len(files) == 0 {
-		return "", fmt.Errorf("No kernel found")
+	for i := len(files)-1; i >= 0; i-- {
+		/* Ensure the kernel name starts with a digit, in order
+		 * to filter out 'extramodules-ARCH' on ArchLinux */
+		filename := files[i].Name()
+		if filename[0] >= '0' && filename[0] <= '9' {
+			return filename, nil
+		}
 	}
 
-	return (files[len(files)-1]).Name(), nil
+	return "", fmt.Errorf("No kernel found")
 }
 
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
