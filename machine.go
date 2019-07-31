@@ -66,7 +66,11 @@ func NewMachine() (m *Machine) {
 		m.addStaticVolume("/bin", "bin")
 		m.addStaticVolume("/lib", "lib")
 	}
-	// Mount for ssl certificates
+
+	// Mounts for ssl certificates
+	if _, err := os.Stat("/etc/ca-certificates"); err == nil {
+		m.AddVolume("/etc/ca-certificates")
+	}
 	if _, err := os.Stat("/etc/ssl"); err == nil {
 		m.AddVolume("/etc/ssl")
 	}
