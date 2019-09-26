@@ -31,6 +31,75 @@ type mountPoint struct {
 	hostDirectory    string
 	machineDirectory string
 	label            string
+	virtfsOptions    []string
+	mountOptions     []string
+}
+
+func newMountPoint(hostDirectory, machineDirectory, label string, options ...MountPointOption) (mp mountPoint) {
+	mp = mountPoint{hostDirectory, machineDirectory, label, make([]string, 0), make([]string, 0)}
+	for _, opt := range options {
+		opt(&mp)
+	}
+	return
+}
+
+// MountPointOption adds an option string to a volume
+type MountPointOption func(*mountPoint)
+
+// VirtfsOption adds an option string (e.g. "security_model=none", "readonly") to one of QEMU's virtfs arguments
+func VirtfsOption(option string) MountPointOption {
+	return func(mp *mountPoint) {
+		mp.virtfsOptions = append(mp.virtfsOptions, option)
+	}
+}
+
+// MountOption adds an option string (e.g. "cache=loose", "nodevmap") to one of the guest's fstab entries
+func MountOption(option string) MountPointOption {
+	return func(mp *mountPoint) {
+		mp.mountOptions = append(mp.mountOptions, option)
+	}
+}
+
+func optionStringWithFallbacks(options []string, fallbacks map[string]string) string {
+	// NOTE: This function mutates `fallbacks`.
+	builder := strings.Builder{}
+	add := func(s string) {
+		builder.WriteRune(',')
+		builder.WriteString(s)
+	}
+
+	for _, opt := range options {
+		split := strings.SplitN(opt, "=", 2)
+		if len(split) == 2 {
+			delete(fallbacks, split[0])
+		}
+		add(opt)
+	}
+
+	for k, v := range fallbacks {
+		add(fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return builder.String()
+}
+
+func (m *mountPoint) virtfsOptionString() string {
+	return optionStringWithFallbacks(
+		m.virtfsOptions,
+		map[string]string{
+			"security_model": "none",
+		},
+	)
+}
+
+func (m *mountPoint) mountOptionString() string {
+	return optionStringWithFallbacks(
+		m.mountOptions,
+		map[string]string{
+			"cache": "loose",
+			"msize": "262144",
+		},
+	)
 }
 
 type image struct {
@@ -182,12 +251,12 @@ LimitNOFILE=4096
 `
 
 func (m *Machine) addStaticVolume(directory, label string) {
-	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
+	m.mounts = append(m.mounts, newMountPoint(directory, directory, label))
 }
 
 // AddVolumeAt mounts hostDirectory from the host at machineDirectory in the
 // fake machine
-func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
+func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string, options ...MountPointOption) {
 	label := fmt.Sprintf("virtfs-%d", m.count)
 	for _, mount := range m.mounts {
 		if mount.hostDirectory == hostDirectory && mount.machineDirectory == machineDirectory {
@@ -195,7 +264,7 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 			return
 		}
 	}
-	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
+	m.mounts = append(m.mounts, newMountPoint(hostDirectory, machineDirectory, label, options...))
 	m.count = m.count + 1
 }
 
@@ -299,8 +368,8 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 
 	for _, point := range m.mounts {
 		fstab = append(fstab,
-			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L,cache=loose,msize=262144 0 0",
-				point.label, point.machineDirectory))
+			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L%s 0 0",
+				point.label, point.machineDirectory, point.mountOptionString()))
 	}
 	fstab = append(fstab, "")
 
@@ -563,8 +632,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	for _, point := range m.mounts {
 		qemuargs = append(qemuargs, "-virtfs",
-			fmt.Sprintf("local,mount_tag=%s,path=%s,security_model=none",
-				point.label, point.hostDirectory))
+			fmt.Sprintf("local,mount_tag=%s,path=%s%s",
+				point.label, point.hostDirectory, point.virtfsOptionString()))
 	}
 
 	for i, img := range m.images {

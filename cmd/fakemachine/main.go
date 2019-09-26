@@ -21,15 +21,35 @@ type Options struct {
 var options Options
 var parser = flags.NewParser(&options, flags.Default)
 
+func parseVolumeOptions(optionString string) (mpo []fakemachine.MountPointOption) {
+	mpo = make([]fakemachine.MountPointOption, 0)
+	opts := strings.Split(optionString, ",")
+	for _, opt := range opts {
+		parts := strings.SplitN(opt, ".", 2)
+		switch parts[0] {
+		case "virtfs":
+			mpo = append(mpo, fakemachine.VirtfsOption(parts[1]))
+		case "mount":
+			mpo = append(mpo, fakemachine.MountOption(parts[1]))
+		default:
+			fmt.Fprintln(os.Stderr, "Failed to parse volume option:", opt)
+			os.Exit(1)
+		}
+	}
+	return
+}
+
 func SetupVolumes(m *fakemachine.Machine, options Options) {
 	for _, v := range options.Volumes {
-		parts := strings.Split(v, ":")
+		parts := strings.SplitN(v, ":", 3)
 
 		switch len(parts) {
 		case 1:
 			m.AddVolume(parts[0])
 		case 2:
 			m.AddVolumeAt(parts[0], parts[1])
+		case 3:
+			m.AddVolumeAt(parts[0], parts[1], parseVolumeOptions(parts[2])...)
 		default:
 			fmt.Fprintln(os.Stderr, "Failed to parse volume: %s", v)
 			os.Exit(1)
