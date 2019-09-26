@@ -31,7 +31,7 @@ func SetupVolumes(m *fakemachine.Machine, options Options) {
 		case 2:
 			m.AddVolumeAt(parts[0], parts[1])
 		default:
-			fmt.Fprintln(os.Stderr, "Failed to parse volume: %s", v)
+			fmt.Fprintln(os.Stderr, "Failed to parse volume:", v)
 			os.Exit(1)
 		}
 	}
