@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -27,6 +28,20 @@ func mergedUsrSystem() bool {
 	}
 
 	return false
+}
+
+// Evaluate any symbolic link, then return the path's directory. Returns an
+// absolute path. Think of it as realpath(1) + dirname(1) in bash.
+func realDir(path string) (string, error) {
+	var p string
+	var err error
+	if p, err = filepath.Abs(path); err != nil {
+		return "", err
+	}
+	if p, err = filepath.EvalSymlinks(p); err != nil {
+		return "", err
+	}
+	return filepath.Dir(p), nil
 }
 
 type mountPoint struct {
@@ -523,8 +538,6 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	if mergedUsrSystem() {
 		prefix = "/usr"
 	}
-	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libresolv.so.2")
-	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libc.so.6")
 
 	// search for busybox; in some distros it's located under /sbin
 	busybox, err := exec.LookPath("busybox")
@@ -535,6 +548,14 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	/* Amd64 dynamic linker */
 	w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+
+	/* C libraries */
+	libraryDir, err := realDir("/lib64/ld-linux-x86-64.so.2")
+	if err != nil {
+		return -1, err
+	}
+	w.CopyFile(libraryDir + "/libc.so.6")
+	w.CopyFile(libraryDir + "/libresolv.so.2")
 
 	w.WriteCharDevice("/dev/console", 5, 1, 0700)
 
