@@ -469,11 +469,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		w.WriteDirectory("/lib", 0755)
 	}
 
-	prefix := ""
 	if mergedUsrSystem() {
-		prefix = "/usr"
+		w.CopyFile("/usr/bin/busybox")
+	} else {
+		w.CopyFile("/bin/busybox")
 	}
-	w.CopyFile(prefix + "/bin/busybox")
 
 	/* Amd64 dynamic linker */
 	w.CopyFile("/lib64/ld-linux-x86-64.so.2")
