@@ -358,7 +358,9 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 	}
 
 	for _, v := range modules {
-		if err := w.CopyFile(path.Join(moddir, kernelRelease, v)); err != nil {
+		modpath := path.Join(moddir, kernelRelease, v)
+
+		if err := w.CopyFile(modpath); err != nil {
 			return err
 		}
 	}
