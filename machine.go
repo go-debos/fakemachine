@@ -360,6 +360,15 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 	for _, v := range modules {
 		modpath := path.Join(moddir, kernelRelease, v)
 
+		if strings.HasSuffix(modpath, ".ko") {
+			if _, err := os.Stat(modpath); err != nil {
+				modpath += ".xz"
+			}
+			if _, err := os.Stat(modpath); err != nil {
+				return err
+			}
+		}
+
 		if err := w.CopyFile(modpath); err != nil {
 			return err
 		}
