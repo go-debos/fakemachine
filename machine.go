@@ -106,6 +106,15 @@ func charsToString(in []int8) string {
 	return string(s[0:i])
 }
 
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
 const initScript = `#!/bin/busybox sh
 
 busybox mount -t proc proc /proc
@@ -368,7 +377,21 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 		moddir = "/usr/lib/modules"
 	}
 
+	builtins := []string{}
+	builtinpath := path.Join(moddir, kernelRelease, "modules.builtin")
+	if _, err := os.Stat(builtinpath); err == nil {
+		data, err := ioutil.ReadFile(builtinpath)
+		if err != nil {
+			return err
+		}
+		builtins = strings.Split(string(data), "\n")
+	}
+
 	for _, v := range modules {
+		if stringInSlice(v, builtins) {
+			continue
+		}
+
 		modpath := path.Join(moddir, kernelRelease, v)
 
 		if err := w.CopyFile(modpath); err != nil {
