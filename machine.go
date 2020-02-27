@@ -4,6 +4,7 @@
 package fakemachine
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io/ioutil"
@@ -357,7 +358,30 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 		moddir = "/usr/lib/modules"
 	}
 
+	// build a list of built-in modules so that we don’t attempt to copy them
+	var builtinModules = make(map[string]bool)
+
+	f, err := os.Open(path.Join(moddir, kernelRelease, "modules.builtin"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		module := scanner.Text()
+		builtinModules[module] = true
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
 	for _, v := range modules {
+		if builtinModules[v] {
+			continue
+		}
+
 		modpath := path.Join(moddir, kernelRelease, v)
 
 		if strings.HasSuffix(modpath, ".ko") {
