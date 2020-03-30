@@ -110,7 +110,10 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	}
 
 	// Dbus configuration
-	m.AddVolume("/etc/dbus-1")
+	if _, err := os.Stat("/etc/dbus-1"); err == nil {
+		m.AddVolume("/etc/dbus-1")
+	}
+
 	// Debian alternative symlinks
 	if _, err := os.Stat("/etc/alternatives"); err == nil {
 		m.AddVolume("/etc/alternatives")
