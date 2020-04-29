@@ -434,6 +434,8 @@ func (m *Machine) cleanup() {
 func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
 	defer m.cleanup()
 
+	os.Setenv("PATH", os.Getenv("PATH") + ":/sbin:/usr/sbin")
+
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
 		return -1, err
