@@ -485,7 +485,13 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libresolv.so.2")
 	w.CopyFile(prefix + "/lib/x86_64-linux-gnu/libc.so.6")
-	w.CopyFile(prefix + "/bin/busybox")
+
+	// search for busybox; in some distros it's located under /sbin
+	busybox, err := exec.LookPath("busybox")
+	if err != nil {
+		return -1, err
+	}
+	w.CopyFileTo(busybox, prefix + "/bin/busybox")
 
 	/* Amd64 dynamic linker */
 	w.CopyFile("/lib64/ld-linux-x86-64.so.2")
