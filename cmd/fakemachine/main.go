@@ -13,6 +13,7 @@ type Options struct {
 	Backend	    string   `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
 	Volumes     []string `short:"v" long:"volume" description:"volume to mount"`
 	Images      []string `short:"i" long:"image" description:"image to add"`
+	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
 	Memory      int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
 	CPUs        int      `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string   `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
@@ -21,6 +22,18 @@ type Options struct {
 
 var options Options
 var parser = flags.NewParser(&options, flags.Default)
+
+func warnLocalhost(variable string, value string) {
+	message := `WARNING: Environment variable %[1]s contains a reference to
+		    localhost. This may not work when running from fakemachine.
+		    Consider using an address that is valid on your network.`
+
+	if strings.Contains(value, "localhost") ||
+	   strings.Contains(value, "127.0.0.1") ||
+	   strings.Contains(value, "::1") {
+		fmt.Printf(message, variable)
+	}
+}
 
 func SetupVolumes(m *fakemachine.Machine, options Options) {
 	for _, v := range options.Volumes {
@@ -68,6 +81,58 @@ func SetupImages(m *fakemachine.Machine, options Options) {
 	}
 }
 
+func SetupEnviron(m *fakemachine.Machine, options Options) {
+	// Initialize environment variables map
+	EnvironVars := make(map[string]string)
+
+	// These are the environment variables that will be detected on the
+	// host and propagated to fakemachine. These are listed lower case, but
+	// they are detected and configured in both lower case and upper case.
+	var environ_vars = [...]string {
+		"http_proxy",
+		"https_proxy",
+		"ftp_proxy",
+		"rsync_proxy",
+		"all_proxy",
+		"no_proxy",
+	}
+
+	// First add variables from host
+	for _, e := range environ_vars {
+		lowerVar := strings.ToLower(e) // lowercase not really needed
+		lowerVal := os.Getenv(lowerVar)
+		if lowerVal != "" {
+			EnvironVars[lowerVar] = lowerVal
+		}
+
+		upperVar := strings.ToUpper(e)
+		upperVal := os.Getenv(upperVar)
+		if upperVal != "" {
+			EnvironVars[upperVar] = upperVal
+		}
+	}
+
+	// Then add/overwrite with variables from command line
+	for k, v := range options.EnvironVars {
+		// Allows the user to unset environ variables with -e
+		if v == "" {
+			delete(EnvironVars, k)
+		} else {
+			EnvironVars[k] = v
+		}
+	}
+
+	// Puts in a format that is compatible with output of os.Environ()
+	if EnvironVars != nil {
+		EnvironString := []string{}
+		for k, v := range EnvironVars {
+			warnLocalhost(k, v)
+			EnvironString = append(EnvironString, fmt.Sprintf("%s=%s", k, v))
+		}
+		m.SetEnviron(EnvironString) // And save the resulting environ vars on m
+	}
+}
+
 func main() {
 	// append the list of available backends to the commandline argument parser
 	opt := parser.FindOptionByLongName("backend")
@@ -92,6 +157,7 @@ func main() {
 	m.SetShowBoot(options.ShowBoot)
 	SetupVolumes(m, options)
 	SetupImages(m, options)
+	SetupEnviron(m, options)
 
 	if options.ScratchSize != "" {
 		size, err := units.FromHumanSize(options.ScratchSize)
