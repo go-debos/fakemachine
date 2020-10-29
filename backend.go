@@ -9,7 +9,7 @@ import(
 
 // A list of backends which are implemented
 func BackendNames() []string {
-	return []string{"auto", "kvm"}
+	return []string{"auto", "kvm", "uml"}
 }
 
 func newBackend(name string, m *Machine) (backend, error) {
@@ -20,6 +20,8 @@ func newBackend(name string, m *Machine) (backend, error) {
 		fallthrough
 	case "kvm":
 		b = newKvmBackend(m)
+	case "uml":
+		b = newUmlBackend(m)
 	default:
 		return nil, fmt.Errorf("%s backend does not exist", name)
 	}
