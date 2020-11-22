@@ -41,6 +41,7 @@ type image struct {
 }
 
 type Machine struct {
+	backend  backend
 	mounts   []mountPoint
 	count    int
 	images   []image
@@ -55,9 +56,25 @@ type Machine struct {
 	scratchdev  string
 }
 
+// Create a new machine object with the auto backend
+func NewMachine() *Machine {
+	m, err := NewMachineWithBackend("auto")
+	if err != nil {
+		panic(err)
+	}
+	return m
+}
+
 // Create a new machine object
-func NewMachine() (m *Machine) {
-	m = &Machine{memory: 2048, numcpus: runtime.NumCPU()}
+func NewMachineWithBackend(backendName string) (*Machine, error) {
+	var err error
+	m := &Machine{memory: 2048, numcpus: runtime.NumCPU()}
+
+	m.backend, err = newBackend(backendName, m)
+	if err != nil {
+		return nil, err
+	}
+
 	// usr is mounted by specific label via /init
 	m.addStaticVolume("/usr", "usr")
 
@@ -86,7 +103,7 @@ func NewMachine() (m *Machine) {
 		m.AddVolume("/var/lib/binfmts")
 	}
 
-	return
+	return m, nil
 }
 
 func InMachine() (ret bool) {
@@ -95,8 +112,9 @@ func InMachine() (ret bool) {
 	return
 }
 
+// Check whether the auto backend is supported
 func Supported() bool {
-	_, err := os.Stat("/dev/kvm")
+	_, err := newBackend("auto", nil)
 	return err == nil
 }
 
@@ -141,8 +159,8 @@ if [ $? != 0 ]; then
   exit
 fi
 
-echo Running '%[1]s'
-%[1]s
+echo Running '%[2]s' using '%[1]s' backend
+%[2]s
 echo $? > /run/fakemachine/result
 `
 
@@ -466,6 +484,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
+	backend := m.backend
+
 	w := writerhelper.NewWriterHelper(f)
 
 	w.WriteDirectory("/scratch", 01777)
@@ -563,7 +583,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		0755)
 
 	w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, command), 0755)
+		fmt.Sprintf(commandWrapper, backend.Name(), command), 0755)
 
 	w.WriteFile("/init", initScript, 0755)
 
