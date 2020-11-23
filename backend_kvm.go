@@ -109,6 +109,10 @@ func (b kvmBackend) InitrdModules() []string {
 			"kernel/fs/fscache/fscache.ko"}
 }
 
+func (b kvmBackend) NetworkdMatch() string {
+	return "e*"
+}
+
 func (b kvmBackend) Start() (bool, error) {
 	m := b.machine
 

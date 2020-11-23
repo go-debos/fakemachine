@@ -135,9 +135,9 @@ if ! busybox test -L /bin ; then
 fi
 exec /lib/systemd/systemd
 `
-const networkd = `
+const networkdTemplate = `
 [Match]
-Name=e*
+Name=%[1]s
 
 [Network]
 DHCP=ipv4
@@ -514,7 +514,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", strings.Join(udevRules, "\n"), 0444)
 	}
 
-	w.WriteFile("/etc/systemd/network/ethernet.network", networkd, 0444)
+	w.WriteFile("/etc/systemd/network/ethernet.network",
+		fmt.Sprintf(networkdTemplate, backend.NetworkdMatch()), 0444)
 	w.WriteSymlink(
 		"/lib/systemd/resolv.conf",
 		"/etc/resolv.conf",

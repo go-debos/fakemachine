@@ -46,6 +46,9 @@ type backend interface {
 	// A list of modules to include in the initrd
 	InitrdModules() []string
 
+	// The match expression used for the networkd configuration
+	NetworkdMatch() string
+
 	// Start an instance of the backend
 	Start() (bool, error)
 }
