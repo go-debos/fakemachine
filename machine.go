@@ -5,7 +5,6 @@ package fakemachine
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -16,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/go-debos/fakemachine/cpio"
-	"golang.org/x/sys/unix"
 )
 
 func mergedUsrSystem() bool {
@@ -324,44 +322,7 @@ func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
 
-func (m *Machine) kernelRelease() (string, error) {
-	/* First try the kernel the current system is running, but if there are no
-	 * modules for that try the latest from /lib/modules. The former works best
-	 * for systems directly running fakemachine, the latter makes sense in docker
-	 * environments */
-	var u unix.Utsname
-	if err := unix.Uname(&u); err != nil {
-		return "", err
-	}
-	release := string(u.Release[:bytes.IndexByte(u.Release[:], 0)])
-
-	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
-		return release, nil
-	}
-
-	files, err := ioutil.ReadDir("/lib/modules")
-	if err != nil {
-		return "", err
-	}
-
-	for i := len(files)-1; i >= 0; i-- {
-		/* Ensure the kernel name starts with a digit, in order
-		 * to filter out 'extramodules-ARCH' on ArchLinux */
-		filename := files[i].Name()
-		if filename[0] >= '0' && filename[0] <= '9' {
-			return filename, nil
-		}
-	}
-
-	return "", fmt.Errorf("No kernel found")
-}
-
-func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
-	kernelRelease, err := m.kernelRelease()
-	if err != nil {
-		return err
-	}
-
+func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string) error {
 	modules := []string{
 		"kernel/drivers/char/virtio_console.ko",
 		"kernel/drivers/virtio/virtio.ko",
@@ -383,15 +344,10 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 		"modules.builtin.bin",
 		"modules.devname"}
 
-	moddir := "/lib/modules"
-	if mergedUsrSystem() {
-		moddir = "/usr/lib/modules"
-	}
-
 	// build a list of built-in modules so that we don’t attempt to copy them
 	var builtinModules = make(map[string]bool)
 
-	f, err := os.Open(path.Join(moddir, kernelRelease, "modules.builtin"))
+	f, err := os.Open(path.Join(moddir, "modules.builtin"))
 	if err != nil {
 		return err
 	}
@@ -412,7 +368,7 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper) error {
 			continue
 		}
 
-		modpath := path.Join(moddir, kernelRelease, v)
+		modpath := path.Join(moddir, v)
 
 		if strings.HasSuffix(modpath, ".ko") {
 			if _, err := os.Stat(modpath); err != nil {
@@ -487,7 +443,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	backend := m.backend
 
-	_, kernelModuleDir, err := hostKernelPath()
+	_, kernelModuleDir, err := backend.KernelPath()
 	if err != nil {
 		return -1, err
 	}
@@ -568,7 +524,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"/etc/resolv.conf",
 		0755)
 
-	m.writerKernelModules(w)
+	m.writerKernelModules(w, kernelModuleDir)
 
 	// By default we send job output to the second virtio console,
 	// reserving /dev/ttyS0 for boot messages (which we ignore)
