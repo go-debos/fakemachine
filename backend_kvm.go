@@ -143,6 +143,14 @@ func (b kvmBackend) MountParameters(mount mountPoint) (string, []string) {
 	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
 }
 
+func (b kvmBackend) InitModules() []string {
+	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p"}
+}
+
+func (b kvmBackend) InitStaticVolumes() []mountPoint {
+	return []mountPoint{}
+}
+
 func (b kvmBackend) Start() (bool, error) {
 	m := b.machine
 

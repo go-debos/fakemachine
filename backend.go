@@ -58,6 +58,12 @@ type backend interface {
 	// The parameters used to mount a specific volume into the machine
 	MountParameters(mount mountPoint) (fstype string, options []string)
 
+	// A list of modules which should be probed in the initscript
+	InitModules() []string
+
+	// A list of additional volumes which should mounted in the initscript
+	InitStaticVolumes() []mountPoint
+
 	// Start an instance of the backend
 	Start() (bool, error)
 }
