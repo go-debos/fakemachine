@@ -109,6 +109,19 @@ func (b kvmBackend) InitrdModules() []string {
 			"kernel/fs/fscache/fscache.ko"}
 }
 
+func (b kvmBackend) UdevRules() []string {
+	udevRules := []string{}
+
+	// create symlink under /dev/disk/by-fakemachine-label/ for each virtual image
+	for i, img := range b.machine.images {
+		driveLetter := 'a' + i
+		udevRules = append(udevRules,
+			fmt.Sprintf(`KERNEL=="vd%c", SYMLINK+="disk/by-fakemachine-label/%s"`, driveLetter, img.label),
+			fmt.Sprintf(`KERNEL=="vd%c[0-9]", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, driveLetter, img.label))
+	}
+	return udevRules
+}
+
 func (b kvmBackend) NetworkdMatch() string {
 	return "e*"
 }

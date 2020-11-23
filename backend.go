@@ -46,6 +46,9 @@ type backend interface {
 	// A list of modules to include in the initrd
 	InitrdModules() []string
 
+	// A list of udev rules
+	UdevRules() []string
+
 	// The match expression used for the networkd configuration
 	NetworkdMatch() string
 
