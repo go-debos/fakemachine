@@ -49,6 +49,9 @@ type backend interface {
 	// The match expression used for the networkd configuration
 	NetworkdMatch() string
 
+	// The tty used for the job output
+	JobOutputTTY() string
+
 	// Start an instance of the backend
 	Start() (bool, error)
 }

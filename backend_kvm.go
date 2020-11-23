@@ -113,6 +113,19 @@ func (b kvmBackend) NetworkdMatch() string {
 	return "e*"
 }
 
+func (b kvmBackend) JobOutputTTY() string {
+	// By default we send job output to the second virtio console,
+	// reserving /dev/ttyS0 for boot messages (which we ignore)
+	// and /dev/hvc0 for possible use by systemd as a getty
+	// (which we also ignore).
+	// If we are debugging, mix job output into the normal
+	// console messages instead, so we can see both.
+	if b.machine.showBoot {
+		return "/dev/console"
+	}
+	return "/dev/hvc0"
+}
+
 func (b kvmBackend) Start() (bool, error) {
 	m := b.machine
 
