@@ -501,18 +501,9 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.CopyFile("/etc/group")
 	w.CopyFile("/etc/nsswitch.conf")
 
-	// udev rule to create symlink under /dev/disk/by-fakemachine-label/ for each virtual image
-	if len(m.images) > 0 {
-		udevRules := []string{}
-		for i, img := range m.images {
-			driveLetter := 'a' + i
-			udevRules = append(udevRules,
-				fmt.Sprintf(`KERNEL=="vd%c", SYMLINK+="disk/by-fakemachine-label/%s"`, driveLetter, img.label),
-				fmt.Sprintf(`KERNEL=="vd%c[0-9]", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, driveLetter, img.label))
-		}
-		udevRules = append(udevRules, "")
-		w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", strings.Join(udevRules, "\n"), 0444)
-	}
+	// udev rules
+	udevRules := strings.Join(backend.UdevRules(), "\n") + "\n"
+	w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
 
 	w.WriteFile("/etc/systemd/network/ethernet.network",
 		fmt.Sprintf(networkdTemplate, backend.NetworkdMatch()), 0444)
