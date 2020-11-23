@@ -40,6 +40,9 @@ type backend interface {
 	// not supported then the error contains a user-facing reason
 	Supported() (bool, error)
 
+	// The path to the kernel and modules
+	KernelPath() (kernelPath string, moddir string, err error)
+
 	// Start an instance of the backend
 	Start() (bool, error)
 }

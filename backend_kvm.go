@@ -4,10 +4,15 @@
 package fakemachine
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 type kvmBackend struct {
@@ -37,10 +42,66 @@ func (b kvmBackend) QemuPath() (string, error) {
 	return exec.LookPath("qemu-system-x86_64")
 }
 
+func (b kvmBackend) hostKernelRelease() (string, error) {
+	/* First try the kernel the current system is running, but if there are no
+	 * modules for that try the latest from /lib/modules. The former works best
+	 * for systems directly running fakemachine, the latter makes sense in docker
+	 * environments */
+	var u unix.Utsname
+	if err := unix.Uname(&u); err != nil {
+		return "", err
+	}
+	release := string(u.Release[:bytes.IndexByte(u.Release[:], 0)])
+
+	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
+		return release, nil
+	}
+
+	files, err := ioutil.ReadDir("/lib/modules")
+	if err != nil {
+		return "", err
+	}
+
+	for i := len(files)-1; i >= 0; i-- {
+		/* Ensure the kernel name starts with a digit, in order
+		 * to filter out 'extramodules-ARCH' on ArchLinux */
+		filename := files[i].Name()
+		if filename[0] >= '0' && filename[0] <= '9' {
+			return filename, nil
+		}
+	}
+
+	return "", fmt.Errorf("No kernel found")
+}
+
+func (b kvmBackend) KernelPath() (string, string, error) {
+	kernelRelease, err := b.hostKernelRelease()
+	if err != nil {
+		return "", "", err
+	}
+
+	kernelPath := "/boot/vmlinuz-" + kernelRelease
+	if _, err := os.Stat(kernelPath); err != nil {
+		return "", "", err
+	}
+
+	moddir := "/lib/modules"
+	if mergedUsrSystem() {
+		moddir = "/usr/lib/modules"
+	}
+
+	moddir = path.Join(moddir, kernelRelease)
+	if _, err := os.Stat(moddir); err != nil {
+		return "", "", err
+	}
+
+	return kernelPath, moddir, nil
+}
+
 func (b kvmBackend) Start() (bool, error) {
 	m := b.machine
 
-	kernelPath, _, err := hostKernelPath()
+	kernelPath, _, err := b.KernelPath()
 	if err != nil {
 		return false, err
 	}
