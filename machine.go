@@ -54,6 +54,7 @@ type Machine struct {
 	scratchpath string
 	scratchfile string
 	scratchdev  string
+	initrdpath  string
 }
 
 // Create a new machine object with the auto backend
@@ -477,8 +478,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
-	InitrdPath := path.Join(tmpdir, "initramfs.cpio")
-	f, err := os.OpenFile(InitrdPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	m.initrdpath = path.Join(tmpdir, "initramfs.cpio")
+	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 
 	if err != nil {
 		return -1, err
@@ -608,7 +609,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"-m", memory,
 		"-enable-kvm",
 		"-kernel", "/boot/vmlinuz-" + kernelRelease,
-		"-initrd", InitrdPath,
+		"-initrd", m.initrdpath,
 		"-display", "none",
 		"-no-reboot"}
 	kernelargs := []string{"console=ttyS0", "panic=-1",
