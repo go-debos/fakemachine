@@ -298,7 +298,7 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	}
 }
 
-func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
+func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
 	if m.scratchfile == "" {
@@ -309,9 +309,10 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper) {
 	}
 
 	for _, point := range m.mounts {
+		fstype, options := backend.MountParameters(point)
 		fstab = append(fstab,
-			fmt.Sprintf("%s %s 9p trans=virtio,version=9p2000.L,cache=loose,msize=262144 0 0",
-				point.label, point.machineDirectory))
+			fmt.Sprintf("%s %s %s %s 0 0",
+				point.label, point.machineDirectory, fstype, strings.Join(options, ",")))
 	}
 	fstab = append(fstab, "")
 
@@ -527,7 +528,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	w.WriteFile("/init", initScript, 0755)
 
-	m.generateFstab(w)
+	m.generateFstab(w, backend)
 
 	for _, v := range extracontent {
 		w.CopyFileTo(v[0], v[1])
