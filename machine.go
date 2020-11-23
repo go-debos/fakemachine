@@ -523,18 +523,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	m.writerKernelModules(w, kernelModuleDir, backend.InitrdModules())
 
-	// By default we send job output to the second virtio console,
-	// reserving /dev/ttyS0 for boot messages (which we ignore)
-	// and /dev/hvc0 for possible use by systemd as a getty
-	// (which we also ignore).
-	tty := "/dev/hvc0"
-	if m.showBoot {
-		// If we are debugging a failing boot, mix job output into
-		// the normal console messages instead, so we can see both.
-		tty = "/dev/console"
-	}
 	w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, tty, strings.Join(m.Environ, " ")), 0644)
+		fmt.Sprintf(serviceTemplate, backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
 
 	w.WriteSymlink(
 		"/lib/systemd/system/serial-getty@ttyS0.service",
