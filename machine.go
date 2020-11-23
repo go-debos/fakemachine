@@ -322,27 +322,23 @@ func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
 
-func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string) error {
-	modules := []string{
-		"kernel/drivers/char/virtio_console.ko",
-		"kernel/drivers/virtio/virtio.ko",
-		"kernel/drivers/virtio/virtio_pci.ko",
-		"kernel/net/9p/9pnet.ko",
-		"kernel/drivers/virtio/virtio_ring.ko",
-		"kernel/fs/9p/9p.ko",
-		"kernel/net/9p/9pnet_virtio.ko",
-		"kernel/fs/fscache/fscache.ko",
-		"modules.order",
-		"modules.builtin",
-		"modules.dep",
-		"modules.dep.bin",
-		"modules.alias",
-		"modules.alias.bin",
-		"modules.softdep",
-		"modules.symbols",
-		"modules.symbols.bin",
-		"modules.builtin.bin",
-		"modules.devname"}
+func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string, modules []string) error {
+	if len(modules) == 0 {
+		return nil
+	}
+
+	modules = append(modules,
+			"modules.order",
+			"modules.builtin",
+			"modules.dep",
+			"modules.dep.bin",
+			"modules.alias",
+			"modules.alias.bin",
+			"modules.softdep",
+			"modules.symbols",
+			"modules.symbols.bin",
+			"modules.builtin.bin",
+			"modules.devname")
 
 	// build a list of built-in modules so that we don’t attempt to copy them
 	var builtinModules = make(map[string]bool)
@@ -524,7 +520,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"/etc/resolv.conf",
 		0755)
 
-	m.writerKernelModules(w, kernelModuleDir)
+	m.writerKernelModules(w, kernelModuleDir, backend.InitrdModules())
 
 	// By default we send job output to the second virtio console,
 	// reserving /dev/ttyS0 for boot messages (which we ignore)

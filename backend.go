@@ -43,6 +43,9 @@ type backend interface {
 	// The path to the kernel and modules
 	KernelPath() (kernelPath string, moddir string, err error)
 
+	// A list of modules to include in the initrd
+	InitrdModules() []string
+
 	// Start an instance of the backend
 	Start() (bool, error)
 }

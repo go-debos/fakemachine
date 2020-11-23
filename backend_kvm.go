@@ -98,6 +98,17 @@ func (b kvmBackend) KernelPath() (string, string, error) {
 	return kernelPath, moddir, nil
 }
 
+func (b kvmBackend) InitrdModules() []string {
+	return []string{"kernel/drivers/char/virtio_console.ko",
+			"kernel/drivers/virtio/virtio.ko",
+			"kernel/drivers/virtio/virtio_pci.ko",
+			"kernel/net/9p/9pnet.ko",
+			"kernel/drivers/virtio/virtio_ring.ko",
+			"kernel/fs/9p/9p.ko",
+			"kernel/net/9p/9pnet_virtio.ko",
+			"kernel/fs/fscache/fscache.ko"}
+}
+
 func (b kvmBackend) Start() (bool, error) {
 	m := b.machine
 
