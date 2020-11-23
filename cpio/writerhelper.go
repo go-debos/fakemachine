@@ -58,11 +58,13 @@ func (w *WriterHelper) WriteDirectory(directory string, perm os.FileMode) {
 }
 
 func (w *WriterHelper) WriteFile(file, content string, perm os.FileMode) {
+	w.WriteFileRaw(file, []byte(content), perm)
+}
+
+func (w *WriterHelper) WriteFileRaw(file string, bytes []byte, perm os.FileMode) {
 	w.ensureBaseDirectory(path.Dir(file))
 
 	hdr := new(cpio.Header)
-
-	bytes := []byte(content)
 
 	hdr.Type = cpio.TYPE_REG
 	hdr.Name = file

@@ -5,6 +5,7 @@ package fakemachine
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/go-debos/fakemachine/cpio"
 )
@@ -31,6 +33,7 @@ type mountPoint struct {
 	hostDirectory    string
 	machineDirectory string
 	label            string
+	static           bool
 }
 
 type image struct {
@@ -122,17 +125,16 @@ const initScript = `#!/bin/busybox sh
 busybox mount -t proc proc /proc
 busybox mount -t sysfs none /sys
 
-busybox modprobe virtio_pci
-busybox modprobe virtio_console
-busybox modprobe 9pnet_virtio
-busybox modprobe 9p
+# probe additional modules
+{{ range $m := .Backend.InitModules }}
+busybox modprobe {{ $m }}
+{{ end }}
 
-busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 usr /usr
-if ! busybox test -L /bin ; then
-	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 sbin /sbin
-	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 bin /bin
-	busybox mount -v -t 9p -o trans=virtio,version=9p2000.L,cache=loose,msize=262144 lib /lib
-fi
+# mount static volumes
+{{ range $point := StaticVolumes .Machine }}
+{{ MountVolume $.Backend $point }}
+{{ end }}
+
 exec /lib/systemd/systemd
 `
 const networkdTemplate = `
@@ -192,8 +194,54 @@ SendSIGHUP=yes
 LimitNOFILE=4096
 `
 
+// helper function to generate a mount command for a given mountpoint
+func tmplMountVolume(b backend, m mountPoint) string {
+	fsType, options := b.MountParameters(m)
+
+	mntCommand := []string{"busybox", "mount", "-v"}
+	mntCommand = append(mntCommand, "-t", fsType)
+	if len(options) > 0 {
+		mntCommand = append(mntCommand, "-o", strings.Join(options, ","))
+	}
+	mntCommand = append(mntCommand, m.label)
+	mntCommand = append(mntCommand, m.machineDirectory)
+	return strings.Join(mntCommand, " ")
+}
+
+// helper function to return the static volumes from a machine, since the mounts variable is unexported
+// include the extra static mounts from the backend
+func tmplStaticVolumes(m Machine) []mountPoint {
+	mounts := []mountPoint{}
+	for _, mount := range append(m.mounts, m.backend.InitStaticVolumes()...) {
+		if mount.static {
+			mounts = append(mounts, mount)
+		}
+	}
+	return mounts
+}
+
+func executeInitScriptTemplate(m *Machine, b backend) []byte {
+	helperFuncs := template.FuncMap{
+		"MountVolume": tmplMountVolume,
+		"StaticVolumes": tmplStaticVolumes,
+	}
+
+	type templateVars struct {
+		Machine *Machine
+		Backend backend
+	}
+	tmplVariables := templateVars{m, b}
+
+	tmpl := template.Must(template.New("init").Funcs(helperFuncs).Parse(initScript))
+	out := &bytes.Buffer{}
+	if err := tmpl.Execute(out, tmplVariables); err != nil {
+		panic(err)
+	}
+	return out.Bytes()
+}
+
 func (m *Machine) addStaticVolume(directory, label string) {
-	m.mounts = append(m.mounts, mountPoint{directory, directory, label})
+	m.mounts = append(m.mounts, mountPoint{directory, directory, label, true})
 }
 
 // AddVolumeAt mounts hostDirectory from the host at machineDirectory in the
@@ -206,7 +254,7 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 			return
 		}
 	}
-	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label})
+	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label, false})
 	m.count = m.count + 1
 }
 
@@ -526,7 +574,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.WriteFile("/wrapper",
 		fmt.Sprintf(commandWrapper, backend.Name(), command), 0755)
 
-	w.WriteFile("/init", initScript, 0755)
+	w.WriteFileRaw("/init", executeInitScriptTemplate(m, backend), 0755)
 
 	m.generateFstab(w, backend)
 
