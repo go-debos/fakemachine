@@ -39,4 +39,7 @@ type backend interface {
 	// Whether the backend is supported on this machine; if the backend is
 	// not supported then the error contains a user-facing reason
 	Supported() (bool, error)
+
+	// Start an instance of the backend
+	Start() (bool, error)
 }
