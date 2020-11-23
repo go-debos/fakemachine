@@ -55,6 +55,9 @@ type backend interface {
 	// The tty used for the job output
 	JobOutputTTY() string
 
+	// The parameters used to mount a specific volume into the machine
+	MountParameters(mount mountPoint) (fstype string, options []string)
+
 	// Start an instance of the backend
 	Start() (bool, error)
 }

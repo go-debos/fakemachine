@@ -139,6 +139,10 @@ func (b kvmBackend) JobOutputTTY() string {
 	return "/dev/hvc0"
 }
 
+func (b kvmBackend) MountParameters(mount mountPoint) (string, []string) {
+	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
+}
+
 func (b kvmBackend) Start() (bool, error) {
 	m := b.machine
 
