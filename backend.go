@@ -17,7 +17,20 @@ func newBackend(name string, m *Machine) (backend, error) {
 
 	switch name {
 	case "auto":
-		fallthrough
+		// select kvm first
+		b, kvm_err := newBackend("kvm", m)
+		if kvm_err == nil {
+			return b, nil
+		}
+
+		// falling back to uml
+		b, uml_err := newBackend("uml", m)
+		if uml_err == nil {
+			return b, nil
+		}
+
+		// no backend supported
+		return nil, fmt.Errorf("%v, %v", kvm_err, uml_err)
 	case "kvm":
 		b = newKvmBackend(m)
 	case "uml":
