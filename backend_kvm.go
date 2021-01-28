@@ -28,9 +28,11 @@ func (b kvmBackend) Name() string {
 }
 
 func (b kvmBackend) Supported() (bool, error) {
-	if _, err := os.Stat("/dev/kvm"); err != nil {
+	kvmDevice, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0);
+	if err != nil {
 		return false, err
 	}
+	kvmDevice.Close()
 
 	if _, err := b.QemuPath(); err != nil {
 		return false, err
