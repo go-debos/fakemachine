@@ -549,6 +549,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.CopyFile("/etc/passwd")
 	w.CopyFile("/etc/group")
 	w.CopyFile("/etc/nsswitch.conf")
+	w.CopyFile("/etc/hosts")
 
 	// udev rules
 	udevRules := strings.Join(backend.UdevRules(), "\n") + "\n"
