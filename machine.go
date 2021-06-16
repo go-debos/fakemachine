@@ -6,6 +6,7 @@ package fakemachine
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,6 +29,80 @@ func mergedUsrSystem() bool {
 	}
 
 	return false
+}
+
+// Parse modinfo output and return the value of module attributes
+// There may be multiple row with same fieldname so []string
+// is used to return all data.
+func getModData(modname string, fieldname string) []string {
+	out, err := exec.Command("modinfo", modname).Output()
+	if err != nil {
+		return nil
+	}
+
+	var fieldValue []string
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		field := strings.Split(strings.TrimSpace(scanner.Text()), ":")
+		if strings.TrimSpace(field[0]) == fieldname {
+			fieldValue = append(fieldValue, strings.TrimSpace(field[1]))
+		}
+	}
+	return fieldValue
+}
+
+// Get full path of module
+func getModPath(modname string) string {
+	path := getModData(modname, "filename")
+	if len(path) != 0  {
+		return path[0]
+	}
+	return ""
+}
+
+// Get all dependent module
+func getModDepends(modname string) []string {
+	deplist := getModData(modname, "depends")
+	var modlist []string
+	for _, v := range deplist {
+		if  v != "" {
+			modlist = append(modlist, strings.Split(v, ",")...)
+		}
+	}
+
+	return modlist
+}
+
+func copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
+	modpath := getModPath(modname)
+	if modpath == "" {
+		return errors.New("Modules path couldn't be determined")
+	}
+
+	if modpath == "(builtin)" || copiedModules[modname] {
+		return nil
+	}
+
+	prefix := ""
+	if mergedUsrSystem() {
+		prefix = "/usr"
+	}
+
+	if err := w.CopyFile(prefix + modpath); err != nil {
+		return err
+	}
+
+	copiedModules[modname] = true;
+
+	deplist := getModDepends(modname)
+	for _, mod := range deplist {
+		if err := copyModules(w, mod, copiedModules); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Evaluate any symbolic link, then return the path's directory. Returns an
@@ -389,13 +464,13 @@ func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
 
+
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string, modules []string) error {
 	if len(modules) == 0 {
 		return nil
 	}
 
-	modules = append(modules,
-			"modules.order",
+	modfiles := []string {"modules.order",
 			"modules.builtin",
 			"modules.dep",
 			"modules.dep.bin",
@@ -405,44 +480,18 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 			"modules.symbols",
 			"modules.symbols.bin",
 			"modules.builtin.bin",
-			"modules.devname")
+			"modules.devname"}
 
-	// build a list of built-in modules so that we don’t attempt to copy them
-	var builtinModules = make(map[string]bool)
-
-	f, err := os.Open(path.Join(moddir, "modules.builtin"))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		module := scanner.Text()
-		builtinModules[module] = true
-	}
-
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	for _, v := range modules {
-		if builtinModules[v] {
-			continue
+	for _, v := range modfiles {
+		if err := w.CopyFile(moddir + "/" + v); err != nil {
+			return err
 		}
+	}
 
-		modpath := path.Join(moddir, v)
+	copiedModules := make(map[string]bool)
 
-		if strings.HasSuffix(modpath, ".ko") {
-			if _, err := os.Stat(modpath); err != nil {
-				modpath += ".xz"
-			}
-			if _, err := os.Stat(modpath); err != nil {
-				return err
-			}
-		}
-
-		if err := w.CopyFile(modpath); err != nil {
+	for _, modname := range modules  {
+		if err := copyModules(w, modname, copiedModules); err != nil {
 			return err
 		}
 	}
