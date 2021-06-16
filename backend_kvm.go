@@ -45,7 +45,7 @@ func (b kvmBackend) QemuPath() (string, error) {
 	return exec.LookPath("qemu-system-x86_64")
 }
 
-func (b kvmBackend) hostKernelRelease() (string, error) {
+func (b kvmBackend) KernelRelease() (string, error) {
 	/* First try the kernel the current system is running, but if there are no
 	 * modules for that try the latest from /lib/modules. The former works best
 	 * for systems directly running fakemachine, the latter makes sense in docker
@@ -124,7 +124,7 @@ func (b kvmBackend) hostKernelPath(kernelRelease string) (string, error) {
 }
 
 func (b kvmBackend) KernelPath() (string, string, error) {
-	kernelRelease, err := b.hostKernelRelease()
+	kernelRelease, err := b.KernelRelease()
 	if err != nil {
 		return "", "", err
 	}
@@ -148,14 +148,14 @@ func (b kvmBackend) KernelPath() (string, string, error) {
 }
 
 func (b kvmBackend) InitrdModules() []string {
-	return []string{"kernel/drivers/char/virtio_console.ko",
-			"kernel/drivers/virtio/virtio.ko",
-			"kernel/drivers/virtio/virtio_pci.ko",
-			"kernel/net/9p/9pnet.ko",
-			"kernel/drivers/virtio/virtio_ring.ko",
-			"kernel/fs/9p/9p.ko",
-			"kernel/net/9p/9pnet_virtio.ko",
-			"kernel/fs/fscache/fscache.ko"}
+	return []string{"virtio_console",
+			"virtio",
+			"virtio_pci",
+			"9pnet",
+			"virtio_ring",
+			"9p",
+			"9pnet_virtio",
+			"fscache"}
 }
 
 func (b kvmBackend) UdevRules() []string {

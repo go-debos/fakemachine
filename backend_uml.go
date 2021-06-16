@@ -4,6 +4,7 @@
 package fakemachine
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -37,6 +38,10 @@ func (b umlBackend) Supported() (bool, error) {
 		return false, fmt.Errorf("libslirp-helper not installed")
 	}
 	return true, nil
+}
+
+func (b umlBackend) KernelRelease() (string, error) {
+	return "", errors.New("Not implemented")
 }
 
 func (b umlBackend) KernelPath() (string, string, error) {

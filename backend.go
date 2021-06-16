@@ -55,6 +55,9 @@ type backend interface {
 	// not supported then the error contains a user-facing reason
 	Supported() (bool, error)
 
+	// Get kernel release version
+	KernelRelease() (string, error)
+
 	// The path to the kernel and modules
 	KernelPath() (kernelPath string, moddir string, err error)
 
