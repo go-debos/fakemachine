@@ -151,11 +151,9 @@ func (b kvmBackend) InitrdModules() []string {
 	return []string{"virtio_console",
 			"virtio",
 			"virtio_pci",
-			"9pnet",
 			"virtio_ring",
 			"9p",
-			"9pnet_virtio",
-			"fscache"}
+			"9pnet_virtio"}
 }
 
 func (b kvmBackend) UdevRules() []string {
