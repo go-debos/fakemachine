@@ -34,8 +34,8 @@ func mergedUsrSystem() bool {
 // Parse modinfo output and return the value of module attributes
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
-func getModData(modname string, fieldname string) []string {
-	out, err := exec.Command("modinfo", modname).Output()
+func getModData(modname string, fieldname string, kernelRelease string) []string {
+	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
 	if err != nil {
 		return nil
 	}
@@ -53,8 +53,8 @@ func getModData(modname string, fieldname string) []string {
 }
 
 // Get full path of module
-func getModPath(modname string) string {
-	path := getModData(modname, "filename")
+func getModPath(modname string, kernelRelease string) string {
+	path := getModData(modname, "filename", kernelRelease)
 	if len(path) != 0  {
 		return path[0]
 	}
@@ -62,8 +62,8 @@ func getModPath(modname string) string {
 }
 
 // Get all dependent module
-func getModDepends(modname string) []string {
-	deplist := getModData(modname, "depends")
+func getModDepends(modname string, kernelRelease string) []string {
+	deplist := getModData(modname, "depends", kernelRelease)
 	var modlist []string
 	for _, v := range deplist {
 		if  v != "" {
@@ -74,8 +74,9 @@ func getModDepends(modname string) []string {
 	return modlist
 }
 
-func copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
-	modpath := getModPath(modname)
+func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
+	release, _ := m.backend.HostKernelRelease()
+	modpath := getModPath(modname, release)
 	if modpath == "" {
 		return errors.New("Modules path couldn't be determined")
 	}
@@ -95,9 +96,9 @@ func copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map
 
 	copiedModules[modname] = true;
 
-	deplist := getModDepends(modname)
+	deplist := getModDepends(modname, release)
 	for _, mod := range deplist {
-		if err := copyModules(w, mod, copiedModules); err != nil {
+		if err := m.copyModules(w, mod, copiedModules); err != nil {
 			return err
 		}
 	}
@@ -491,7 +492,7 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 	copiedModules := make(map[string]bool)
 
 	for _, modname := range modules  {
-		if err := copyModules(w, modname, copiedModules); err != nil {
+		if err := m.copyModules(w, modname, copiedModules); err != nil {
 			return err
 		}
 	}

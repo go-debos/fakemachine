@@ -45,7 +45,7 @@ func (b kvmBackend) QemuPath() (string, error) {
 	return exec.LookPath("qemu-system-x86_64")
 }
 
-func (b kvmBackend) hostKernelRelease() (string, error) {
+func (b kvmBackend) HostKernelRelease() (string, error) {
 	/* First try the kernel the current system is running, but if there are no
 	 * modules for that try the latest from /lib/modules. The former works best
 	 * for systems directly running fakemachine, the latter makes sense in docker
@@ -124,7 +124,7 @@ func (b kvmBackend) hostKernelPath(kernelRelease string) (string, error) {
 }
 
 func (b kvmBackend) KernelPath() (string, string, error) {
-	kernelRelease, err := b.hostKernelRelease()
+	kernelRelease, err := b.HostKernelRelease()
 	if err != nil {
 		return "", "", err
 	}
