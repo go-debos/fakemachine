@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -457,6 +458,33 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) {
 	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
 }
 
+func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) {
+	keys := make([]string, len(modules))
+	i := 0
+	for k := range modules {
+		keys[i] = k
+		i += 1
+	}
+
+	sort.Strings(keys)
+
+	output := make([]string, len(keys))
+	release, _ := m.backend.KernelRelease()
+	for i, k := range keys {
+		modpath := getModPath(k, release) // CANNOT fail
+		deplist := getModDepends(k, release) // CANNOT fail
+		deps := make([]string, len(deplist))
+		for j, mod := range deplist {
+			deppath := getModPath(mod, release) // CANNOT fail
+			deps[j] = deppath
+		}
+		output[i] = fmt.Sprintf("%s: %s", modpath, strings.Join(deps, " "))
+	}
+
+	path := path.Join(moddir, "modules.dep")
+	w.WriteFile(path, strings.Join(output, "\n"), 0644)
+}
+
 func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
@@ -469,8 +497,6 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 
 	modfiles := []string {"modules.order",
 			"modules.builtin",
-			"modules.dep",
-			"modules.dep.bin",
 			"modules.alias",
 			"modules.alias.bin",
 			"modules.softdep",
@@ -492,6 +518,8 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 			return err
 		}
 	}
+
+	m.generateModulesDep(w, moddir, copiedModules)
 	return nil
 }
 
