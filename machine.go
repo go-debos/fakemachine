@@ -532,15 +532,10 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 		return nil
 	}
 
-	modfiles := []string {"modules.order",
+	modfiles := []string {
 			"modules.builtin",
 			"modules.alias",
-			"modules.alias.bin",
-			"modules.softdep",
-			"modules.symbols",
-			"modules.symbols.bin",
-			"modules.builtin.bin",
-			"modules.devname"}
+			"modules.symbols"}
 
 	for _, v := range modfiles {
 		if err := w.CopyFile(moddir + "/" + v); err != nil {
