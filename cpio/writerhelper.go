@@ -1,6 +1,7 @@
 package writerhelper
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,8 @@ type WriterHelper struct {
 	paths map[string]bool
 	*cpio.Writer
 }
+
+type Transformer func(dst io.Writer, src io.Reader) error
 
 func NewWriterHelper(f io.Writer) *WriterHelper {
 	return &WriterHelper{
@@ -143,6 +146,35 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 
 	w.WriteHeader(hdr)
 	io.Copy(w, f)
+
+	return nil
+}
+
+func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) error {
+	w.ensureBaseDirectory(path.Dir(dst))
+
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	out := new(bytes.Buffer)
+	fn(out, f)
+
+	hdr := new(cpio.Header)
+	hdr.Type = cpio.TYPE_REG
+	hdr.Name = dst
+	hdr.Mode = int64(info.Mode() & ^os.ModeType)
+	hdr.Size = int64(out.Len())
+
+	w.WriteHeader(hdr)
+	io.Copy(w, out)
 
 	return nil
 }

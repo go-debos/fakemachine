@@ -75,7 +75,7 @@ func getModDepends(modname string, kernelRelease string) []string {
 	return modlist
 }
 
-func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
+func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, suffixes map[string]writerhelper.Transformer, copiedModules map[string]bool) error {
 	release, _ := m.backend.KernelRelease()
 	modpath := getModPath(modname, release)
 	if modpath == "" {
@@ -91,15 +91,34 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 		prefix = "/usr"
 	}
 
-	if err := w.CopyFile(prefix + modpath); err != nil {
-		return err
+	found := false
+	for suffix, fn := range suffixes {
+		if strings.HasSuffix(modpath, suffix) {
+			// File must exist as-is on the filesystem. Aka do not
+			// fallback to other suffixes.
+			if _, err := os.Stat(modpath); err != nil {
+				return err
+			}
+
+			// The suffix is the complete thing - ".ko.foobar"
+			// Reinstate the required ".ko" part, after trimming.
+			basepath := strings.TrimSuffix(modpath, suffix) + ".ko"
+			if err := w.TransformFileTo(modpath, prefix + basepath, fn); err != nil {
+				return err
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("Module extension/suffix unknown")
 	}
 
 	copiedModules[modname] = true;
 
 	deplist := getModDepends(modname, release)
 	for _, mod := range deplist {
-		if err := m.copyModules(w, mod, copiedModules); err != nil {
+		if err := m.copyModules(w, mod, suffixes, copiedModules); err != nil {
 			return err
 		}
 	}
@@ -458,7 +477,18 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) {
 	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
 }
 
-func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) {
+func stripModuleSuffixes(module string, suffixes []string) (string, error) {
+	for _, suffix := range(suffixes) {
+		if strings.HasSuffix(module, suffix) {
+			// The suffix is the complete thing - ".ko.foobar"
+			// Reinstate the required ".ko" part, after trimming.
+			return strings.TrimSuffix(module, suffix) + ".ko", nil
+		}
+	}
+	return "", errors.New("Module extension/suffix unknown")
+}
+
+func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, suffixes []string, modules map[string]bool) {
 	keys := make([]string, len(modules))
 	i := 0
 	for k := range modules {
@@ -471,11 +501,11 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	output := make([]string, len(keys))
 	release, _ := m.backend.KernelRelease()
 	for i, k := range keys {
-		modpath := getModPath(k, release) // CANNOT fail
+		modpath, _ := stripModuleSuffixes(getModPath(k, release), suffixes)  // CANNOT fail
 		deplist := getModDepends(k, release) // CANNOT fail
 		deps := make([]string, len(deplist))
 		for j, mod := range deplist {
-			deppath := getModPath(mod, release) // CANNOT fail
+			deppath, _ := stripModuleSuffixes(getModPath(mod, release), suffixes) // CANNOT fail
 			deps[j] = deppath
 		}
 		output[i] = fmt.Sprintf("%s: %s", modpath, strings.Join(deps, " "))
@@ -491,6 +521,13 @@ func (m *Machine) SetEnviron(environ []string) {
 
 
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string, modules []string) error {
+	suffixes := map[string]writerhelper.Transformer {
+		".ko": NullDecompressor,
+		".ko.gz": GzipDecompressor,
+		".ko.xz": XzDecompressor,
+		".ko.zst": ZstdDecompressor,
+	}
+
 	if len(modules) == 0 {
 		return nil
 	}
@@ -514,12 +551,19 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 	copiedModules := make(map[string]bool)
 
 	for _, modname := range modules  {
-		if err := m.copyModules(w, modname, copiedModules); err != nil {
+		if err := m.copyModules(w, modname, suffixes, copiedModules); err != nil {
 			return err
 		}
 	}
 
-	m.generateModulesDep(w, moddir, copiedModules)
+	suffixKeys := make([]string, len(suffixes))
+	i := 0
+	for k := range suffixes {
+		suffixKeys[i] = k
+		i++
+	}
+
+	m.generateModulesDep(w, moddir, suffixKeys, copiedModules)
 	return nil
 }
 
