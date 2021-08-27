@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -684,12 +685,29 @@ func (m *Machine) Run(command string) (int, error) {
 	return m.startup(command, nil)
 }
 
+// Escape input patterns with backslash
+// The pattern could be one or more characters in \.+*?()|[]{}^$
+func escapePatterns(s string, patterns []string) string {
+	for _, v := range patterns {
+		if strings.Contains(s, v) {
+			s = strings.Replace(s, v, regexp.QuoteMeta(v), -1)
+		}
+	}
+
+	return s
+}
+
 // RunInMachineWithArgs runs the caller binary inside the fakemachine with the
 // specified commandline arguments
 func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	name := path.Join("/", path.Base(os.Args[0]))
 
-	// FIXME: shell escaping?
+	// Add shell escaping for '$'
+	patterns := []string{`$`}
+	for i, v := range args {
+		args[i] = escapePatterns(v, patterns)
+	}
+
 	command := strings.Join(append([]string{name}, args...), " ")
 
 	executable, err := exec.LookPath(os.Args[0])
