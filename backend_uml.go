@@ -4,9 +4,9 @@
 package fakemachine
 
 import (
+	"strings"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -51,22 +51,16 @@ func (b umlBackend) KernelPath() (string, string, error) {
 		return "", "", fmt.Errorf("user-mode-linux not installed")
 	}
 
-	// make sure the UML modules exist
-	// on non-merged usr systems the modules still reside under /usr/lib/uml
-	moddir := "/usr/lib/uml/modules"
-	if _, err := os.Stat(moddir); err != nil {
-		return "", "", fmt.Errorf("user-mode-linux modules not installed")
-	}
-
-	// find the subdirectory containing the modules for the UML release
-	modSubdirs, err := ioutil.ReadDir(moddir)
+	kernelRelease, err := exec.Command(kernelPath, "--version").Output()
 	if err != nil {
 		return "", "", err
 	}
-	if len(modSubdirs) != 1 {
-		return "", "", fmt.Errorf("could not determine which user-mode-linux modules to use")
+
+	// determine the UML modules
+	moddir := path.Join("/usr/lib/uml/modules", strings.TrimSuffix(string(kernelRelease), "\n"))
+	if _, err := os.Stat(moddir); err != nil {
+		return "", "", fmt.Errorf("user-mode-linux modules not installed")
 	}
-	moddir = path.Join(moddir, modSubdirs[0].Name())
 
 	return kernelPath, moddir, nil
 }
