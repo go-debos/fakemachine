@@ -125,7 +125,6 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 	f, err := os.Open(src)
 	if err != nil {
 		panic(err)
-		return err
 	}
 	defer f.Close()
 
