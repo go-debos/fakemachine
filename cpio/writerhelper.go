@@ -2,7 +2,6 @@ package writerhelper
 
 import (
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -125,7 +124,7 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 
 	f, err := os.Open(src)
 	if err != nil {
-		log.Panicf("open failed: %s - %v", src, err)
+		panic(err)
 		return err
 	}
 	defer f.Close()
