@@ -35,7 +35,7 @@ func (b umlBackend) Supported() (bool, error) {
 
 	// check the slirp helper exists exec.LookPath
 	if _, err := b.SlirpHelperPath(); err != nil {
-		return false, fmt.Errorf("libslirp-helper not installed")
+		return false, err
 	}
 	return true, nil
 }
@@ -46,9 +46,9 @@ func (b umlBackend) KernelRelease() (string, error) {
 
 func (b umlBackend) KernelPath() (string, string, error) {
 	// find the UML binary
-	kernelPath, err := exec.LookPath("linux.uml")
+	kernelPath, err := b.UmlBinaryPath()
 	if err != nil {
-		return "", "", fmt.Errorf("user-mode-linux not installed")
+		return "", "", err
 	}
 
 	kernelRelease, err := exec.Command(kernelPath, "--version").Output()
@@ -57,16 +57,59 @@ func (b umlBackend) KernelPath() (string, string, error) {
 	}
 
 	// determine the UML modules
-	moddir := path.Join("/usr/lib/uml/modules", strings.TrimSuffix(string(kernelRelease), "\n"))
+	moddir, err := b.UmlModulesPath()
+	if err != nil {
+		return "", "", err
+	}
+
+	moddir = path.Join(moddir, strings.TrimSuffix(string(kernelRelease), "\n"))
 	if _, err := os.Stat(moddir); err != nil {
-		return "", "", fmt.Errorf("user-mode-linux modules not installed")
+		return "", "", err
 	}
 
 	return kernelPath, moddir, nil
 }
 
+func (b umlBackend) UmlBinaryPath() (string, error) {
+	kernelBinaries := []string {"linux.uml", "vmlinux", "linux"}
+	for _, p := range kernelBinaries {
+		path, err := exec.LookPath(p)
+		if err != nil {
+			continue
+		}
+
+		return path, err
+	}
+
+	return "", fmt.Errorf("user-mode-linux binary not installed")
+}
+
+func (b umlBackend) UmlModulesPath() (string, error) {
+	modulesPaths := []string {"/usr/lib/uml/modules", "/usr/lib/modules"}
+	for _, p := range modulesPaths {
+		_, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+
+		return p, err
+	}
+
+	return "", fmt.Errorf("user-mode-linux modules not installed")
+}
+
 func (b umlBackend) SlirpHelperPath() (string, error) {
-	return exec.LookPath("libslirp-helper")
+	slirpBinaries := []string {"libslirp-helper", "slirp-helper"}
+	for _, p := range slirpBinaries {
+		path, err := exec.LookPath(p)
+		if err != nil {
+			continue
+		}
+
+		return path, err
+	}
+
+	return "", fmt.Errorf("libslirp-helper not installed")
 }
 
 func (b umlBackend) InitrdModules() []string {
