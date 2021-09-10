@@ -118,15 +118,6 @@ func (b qemuBackend) ModulePath() (string, error) {
 	return moddir, nil
 }
 
-func (b qemuBackend) InitrdModules() []string {
-	return []string{"virtio_console",
-			"virtio",
-			"virtio_pci",
-			"virtio_ring",
-			"9p",
-			"9pnet_virtio"}
-}
-
 func (b qemuBackend) UdevRules() []string {
 	udevRules := []string{}
 
