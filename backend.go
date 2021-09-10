@@ -72,9 +72,6 @@ type backend interface {
 	// The path to the modules
 	ModulePath() (moddir string, err error)
 
-	// A list of modules to include in the initrd
-	InitrdModules() []string
-
 	// A list of udev rules
 	UdevRules() []string
 
@@ -87,7 +84,7 @@ type backend interface {
 	// The parameters used to mount a specific volume into the machine
 	MountParameters(mount mountPoint) (fstype string, options []string)
 
-	// A list of modules which should be probed in the initscript
+	// A list of modules to be added to initrd and probed in the initscript
 	InitModules() []string
 
 	// A list of additional volumes which should mounted in the initscript

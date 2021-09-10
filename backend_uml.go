@@ -82,10 +82,6 @@ func (b umlBackend) SlirpHelperPath() (string, error) {
 	return exec.LookPath("libslirp-helper")
 }
 
-func (b umlBackend) InitrdModules() []string {
-	return []string{}
-}
-
 func (b umlBackend) UdevRules() []string {
 	udevRules := []string{}
 

@@ -661,7 +661,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"/etc/resolv.conf",
 		0755)
 
-	err = m.writerKernelModules(w, kernelModuleDir, backend.InitrdModules())
+	err = m.writerKernelModules(w, kernelModuleDir, backend.InitModules())
 	if err != nil {
 		return -1, err
 	}
