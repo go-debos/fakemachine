@@ -552,7 +552,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	backend := m.backend
 
-	_, kernelModuleDir, err := backend.KernelPath()
+	kernelModuleDir, err := backend.ModulePath()
 	if err != nil {
 		return -1, err
 	}

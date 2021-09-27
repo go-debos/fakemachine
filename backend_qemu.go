@@ -71,15 +71,24 @@ func (b qemuBackend) KernelRelease() (string, error) {
 	return "", fmt.Errorf("No kernel found")
 }
 
-func (b qemuBackend) KernelPath() (string, string, error) {
+func (b qemuBackend) KernelPath() (string, error) {
 	kernelRelease, err := b.KernelRelease()
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	kernelPath := "/boot/vmlinuz-" + kernelRelease
 	if _, err := os.Stat(kernelPath); err != nil {
-		return "", "", err
+		return "", err
+	}
+
+	return kernelPath, nil
+}
+
+func (b qemuBackend) ModulePath() (string, error) {
+	kernelRelease, err := b.KernelRelease()
+	if err != nil {
+		return "", err
 	}
 
 	moddir := "/lib/modules"
@@ -89,10 +98,10 @@ func (b qemuBackend) KernelPath() (string, string, error) {
 
 	moddir = path.Join(moddir, kernelRelease)
 	if _, err := os.Stat(moddir); err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	return kernelPath, moddir, nil
+	return moddir, nil
 }
 
 func (b qemuBackend) InitrdModules() []string {
@@ -153,7 +162,7 @@ func (b qemuBackend) Start() (bool, error) {
 func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	m := b.machine
 
-	kernelPath, _, err := b.KernelPath()
+	kernelPath, err := b.KernelPath()
 	if err != nil {
 		return false, err
 	}

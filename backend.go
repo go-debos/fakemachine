@@ -66,8 +66,11 @@ type backend interface {
 	// Get kernel release version
 	KernelRelease() (string, error)
 
-	// The path to the kernel and modules
-	KernelPath() (kernelPath string, moddir string, err error)
+	// The path to the kernel
+	KernelPath() (kernelPath string, err error)
+
+	// The path to the modules
+	ModulePath() (moddir string, err error)
 
 	// A list of modules to include in the initrd
 	InitrdModules() []string
