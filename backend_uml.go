@@ -28,8 +28,12 @@ func (b umlBackend) Name() string {
 
 func (b umlBackend) Supported() (bool, error) {
 	// check the kernel exists
-	_, _, err := b.KernelPath()
-	if err != nil {
+	if _, err := b.KernelPath(); err != nil {
+		return false, err
+	}
+
+	// check the modules exist
+	if _, err := b.ModulePath(); err != nil {
 		return false, err
 	}
 
@@ -44,31 +48,34 @@ func (b umlBackend) KernelRelease() (string, error) {
 	return "", errors.New("Not implemented")
 }
 
-func (b umlBackend) KernelPath() (string, string, error) {
+func (b umlBackend) KernelPath() (string, error) {
 	// find the UML binary
 	kernelPath, err := exec.LookPath("linux.uml")
 	if err != nil {
-		return "", "", fmt.Errorf("user-mode-linux not installed")
+		return "", fmt.Errorf("user-mode-linux not installed")
 	}
+	return kernelPath, nil
+}
 
+func (b umlBackend) ModulePath() (string, error) {
 	// make sure the UML modules exist
 	// on non-merged usr systems the modules still reside under /usr/lib/uml
 	moddir := "/usr/lib/uml/modules"
 	if _, err := os.Stat(moddir); err != nil {
-		return "", "", fmt.Errorf("user-mode-linux modules not installed")
+		return "", fmt.Errorf("user-mode-linux modules not installed")
 	}
 
 	// find the subdirectory containing the modules for the UML release
 	modSubdirs, err := ioutil.ReadDir(moddir)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	if len(modSubdirs) != 1 {
-		return "", "", fmt.Errorf("could not determine which user-mode-linux modules to use")
+		return "", fmt.Errorf("could not determine which user-mode-linux modules to use")
 	}
 	moddir = path.Join(moddir, modSubdirs[0].Name())
 
-	return kernelPath, moddir, nil
+	return moddir, nil
 }
 
 func (b umlBackend) SlirpHelperPath() (string, error) {
@@ -117,7 +124,7 @@ func (b umlBackend) InitModules() []string {
 func (b umlBackend) InitStaticVolumes() []mountPoint {
 	// mount the UML modules over the top of /lib/modules
 	// which currently contains the modules from the base system
-	_, moddir, _ := b.KernelPath()
+	moddir, _ := b.ModulePath()
 	moddir = path.Join(moddir, "../")
 
 	machineDir := "/lib/modules"
@@ -132,7 +139,7 @@ func (b umlBackend) InitStaticVolumes() []mountPoint {
 func (b umlBackend) Start() (bool, error) {
 	m := b.machine
 
-	kernelPath, _, err := b.KernelPath()
+	kernelPath, err := b.KernelPath()
 	if err != nil {
 		return false, err
 	}
