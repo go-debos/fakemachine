@@ -72,6 +72,20 @@ func (b qemuBackend) KernelRelease() (string, error) {
 }
 
 func (b qemuBackend) KernelPath() (string, error) {
+	/* First we look within the modules directory, as supported by
+	 * various distributions - Arch, Fedora...
+	 *
+	 * ... perhaps because systemd requires it to allow hibernation
+	 * https://github.com/systemd/systemd/commit/edda44605f06a41fb86b7ab8128dcf99161d2344
+	 */
+	if moddir, err := b.ModulePath(); err == nil {
+		kernelPath := path.Join(moddir, "vmlinuz")
+		if _, err := os.Stat(kernelPath); err == nil {
+			return kernelPath, nil
+		}
+	}
+
+	/* Fall-back to the previous method and look in /boot */
 	kernelRelease, err := b.KernelRelease()
 	if err != nil {
 		return "", err
