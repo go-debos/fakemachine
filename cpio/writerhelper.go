@@ -1,8 +1,8 @@
 package writerhelper
 
 import (
+	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -104,20 +104,20 @@ func (w *WriterHelper) WriteCharDevice(device string, major, minor int64,
 	w.WriteHeader(hdr)
 }
 
-func (w *WriterHelper) CopyTree(path string) {
+func (w *WriterHelper) CopyTree(path string) error {
 	walker := func(p string, info os.FileInfo, err error) error {
 		if info.Mode().IsDir() {
 			w.WriteDirectory(p, info.Mode() & ^os.ModeType)
 		} else if info.Mode().IsRegular() {
 			w.CopyFile(p)
 		} else {
-			panic("No handled")
+			return fmt.Errorf("File type not handled for %s", p)
 		}
 
 		return nil
 	}
 
-	filepath.Walk(path, walker)
+	return filepath.Walk(path, walker)
 }
 
 func (w *WriterHelper) CopyFileTo(src, dst string) error {
@@ -125,8 +125,7 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 
 	f, err := os.Open(src)
 	if err != nil {
-		log.Panicf("open failed: %s - %v", src, err)
-		return err
+		return fmt.Errorf("open failed: %s - %v", src, err)
 	}
 	defer f.Close()
 
