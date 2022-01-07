@@ -185,3 +185,35 @@ func TestImageLabel(t *testing.T) {
 		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
 	}
 }
+
+func TestVolumes(t *testing.T) {
+	t.Parallel()
+	if InMachine() {
+		t.Log("Running in the machine")
+		return
+	}
+
+	/* Try to mount a non-existent file into the machine */
+	m := CreateMachine(t)
+	m.AddVolume("random_directory_never_exists")
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run TestVolumes"})
+	require.Equal(t, exitcode, -1)
+	require.Error(t, err)
+
+	/* Try to mount a device file into the machine */
+	m = CreateMachine(t)
+	m.AddVolume("/dev/zero")
+
+	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run TestVolumes"})
+	require.Equal(t, exitcode, -1)
+	require.Error(t, err)
+
+	/* Try to mount a volume with whitespace into the machine */
+	m = CreateMachine(t)
+	m.AddVolumeAt("/dev", "/dev ices")
+
+	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run TestVolumes"})
+	require.Equal(t, exitcode, -1)
+	require.Error(t, err)
+}

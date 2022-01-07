@@ -13,12 +13,13 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
 
-	"github.com/go-debos/fakemachine/cpio"
+	writerhelper "github.com/go-debos/fakemachine/cpio"
 )
 
 func mergedUsrSystem() bool {
@@ -577,6 +578,25 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	defer m.cleanup()
 
 	os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin")
+
+	/* Sanity check mountpoints */
+	for _, v := range m.mounts {
+		/* Check the directory exists on the host */
+		stat, err := os.Stat(v.hostDirectory)
+		if err != nil || !stat.IsDir() {
+			return -1, fmt.Errorf("Couldn't mount %s inside machine: expected a directory", v.hostDirectory)
+		}
+
+		/* Check for whitespace in the machine directory */
+		if regexp.MustCompile(`\s`).MatchString(v.machineDirectory) {
+			return -1, fmt.Errorf("Couldn't mount %s inside machine: machine directory (%s) contains whitespace", v.hostDirectory, v.machineDirectory)
+		}
+
+		/* Check for whitespace in the label */
+		if regexp.MustCompile(`\s`).MatchString(v.label) {
+			return -1, fmt.Errorf("Couldn't mount %s inside machine: label (%s) contains whitespace", v.hostDirectory, v.label)
+		}
+	}
 
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {
