@@ -150,12 +150,8 @@ type Machine struct {
 }
 
 // Create a new machine object with the auto backend
-func NewMachine() *Machine {
-	m, err := NewMachineWithBackend("auto")
-	if err != nil {
-		panic(err)
-	}
-	return m
+func NewMachine() (*Machine, error) {
+	return NewMachineWithBackend("auto")
 }
 
 // Create a new machine object
@@ -314,7 +310,7 @@ func tmplStaticVolumes(m Machine) []mountPoint {
 	return mounts
 }
 
-func executeInitScriptTemplate(m *Machine, b backend) []byte {
+func executeInitScriptTemplate(m *Machine, b backend) ([]byte, error) {
 	helperFuncs := template.FuncMap{
 		"MountVolume": tmplMountVolume,
 		"StaticVolumes": tmplStaticVolumes,
@@ -329,9 +325,9 @@ func executeInitScriptTemplate(m *Machine, b backend) []byte {
 	tmpl := template.Must(template.New("init").Funcs(helperFuncs).Parse(initScript))
 	out := &bytes.Buffer{}
 	if err := tmpl.Execute(out, tmplVariables); err != nil {
-		panic(err)
+		return nil, err
 	}
-	return out.Bytes()
+	return out.Bytes(), nil
 }
 
 func (m *Machine) addStaticVolume(directory, label string) {
@@ -597,32 +593,62 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	if err != nil {
 		return -1, err
 	}
-	w.CopyFileTo(busybox, prefix + "/bin/busybox")
+	err = w.CopyFileTo(busybox, prefix+"/bin/busybox")
+	if err != nil {
+		return -1, err
+	}
 
 	/* Amd64 dynamic linker */
-	w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+	err = w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+	if err != nil {
+		return -1, err
+	}
 
 	/* C libraries */
 	libraryDir, err := realDir("/lib64/ld-linux-x86-64.so.2")
 	if err != nil {
 		return -1, err
 	}
-	w.CopyFile(libraryDir + "/libc.so.6")
-	w.CopyFile(libraryDir + "/libresolv.so.2")
+	err = w.CopyFile(libraryDir + "/libc.so.6")
+	if err != nil {
+		return -1, err
+	}
+	err = w.CopyFile(libraryDir + "/libresolv.so.2")
+	if err != nil {
+		return -1, err
+	}
 
 	w.WriteCharDevice("/dev/console", 5, 1, 0700)
 
 	// Linker configuration
-	w.CopyFile("/etc/ld.so.conf")
-	w.CopyTree("/etc/ld.so.conf.d")
+	err = w.CopyFile("/etc/ld.so.conf")
+	if err != nil {
+		return -1, err
+	}
+
+	err = w.CopyTree("/etc/ld.so.conf.d")
+	if err != nil {
+		return -1, err
+	}
 
 	// Core system configuration
 	w.WriteFile("/etc/machine-id", "", 0444)
 	w.WriteFile("/etc/hostname", "fakemachine", 0444)
 
-	w.CopyFile("/etc/passwd")
-	w.CopyFile("/etc/group")
-	w.CopyFile("/etc/nsswitch.conf")
+	err = w.CopyFile("/etc/passwd")
+	if err != nil {
+		return -1, err
+	}
+
+	err = w.CopyFile("/etc/group")
+	if err != nil {
+		return -1, err
+	}
+
+	err = w.CopyFile("/etc/nsswitch.conf")
+	if err != nil {
+		return -1, err
+	}
 
 	// udev rules
 	udevRules := strings.Join(backend.UdevRules(), "\n") + "\n"
@@ -635,7 +661,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"/etc/resolv.conf",
 		0755)
 
-	m.writerKernelModules(w, kernelModuleDir, backend.InitrdModules())
+	err = m.writerKernelModules(w, kernelModuleDir, backend.InitrdModules())
+	if err != nil {
+		return -1, err
+	}
 
 	w.WriteFile("etc/systemd/system/fakemachine.service",
 		fmt.Sprintf(serviceTemplate, backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
@@ -648,7 +677,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.WriteFile("/wrapper",
 		fmt.Sprintf(commandWrapper, backend.Name(), command), 0755)
 
-	w.WriteFileRaw("/init", executeInitScriptTemplate(m, backend), 0755)
+	init, err := executeInitScriptTemplate(m, backend)
+	if err != nil {
+		return -1, err
+	}
+	w.WriteFileRaw("/init", init, 0755)
 
 	m.generateFstab(w, backend)
 
