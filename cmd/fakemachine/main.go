@@ -17,6 +17,7 @@ type Options struct {
 	Memory      int               `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
 	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
+	SwapSize    string            `long:"swapsize" description:"On-disk swap space size (with a unit suffix, e.g. 2G); if unset, swap size will be zero"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 }
 
@@ -164,6 +165,15 @@ func main() {
 			os.Exit(1)
 		}
 		m.SetScratch(size, "")
+	}
+
+	if options.SwapSize != "" {
+		size, err := units.FromHumanSize(options.SwapSize)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse swap size: %v\n", err)
+			os.Exit(1)
+		}
+		m.SetSwap(size, "")
 	}
 
 	if options.Memory > 0 {

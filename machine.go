@@ -169,6 +169,11 @@ type Machine struct {
 	scratchfile string
 	scratchdev  string
 	initrdpath  string
+
+	swapsize int64
+	swappath string
+	swapfile string
+	swapdev  string
 }
 
 // Create a new machine object with the auto backend
@@ -458,6 +463,20 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	}
 }
 
+// SetSwap sets the size and location of on-disk swap space to allocate
+// for fakemachine VM. If not set, swap space will not be allocated. If
+// Path is "" then the working directory is used as a default storage location
+// Since this function has single caller which uses empty path, path argument
+// is not required but still added to keep in symmnetry with SetScratch.
+func (m *Machine) SetSwap(swapsize int64, path string) {
+	m.swapsize = swapsize
+	if path == "" {
+		m.swappath, _ = os.Getwd()
+	} else {
+		m.swappath = path
+	}
+}
+
 func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
@@ -466,6 +485,11 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 	} else {
 		fstab = append(fstab, fmt.Sprintf("%s /scratch ext4 defaults,relatime 0 0",
 			m.scratchdev))
+	}
+
+	if m.swapfile != "" {
+		fstab = append(fstab, fmt.Sprintf("%s none swap defaults 0 0",
+			m.swapdev))
 	}
 
 	for _, point := range m.mounts {
@@ -563,12 +587,36 @@ func (m *Machine) setupscratch() error {
 	return err
 }
 
+func (m *Machine) setupswap() error {
+	if m.swapsize == 0 {
+		return nil
+	}
+
+	tmpfile, err := ioutil.TempFile(m.swappath, "fake-swap.img.")
+	if err != nil {
+		return err
+	}
+	m.swapfile = tmpfile.Name()
+
+	m.swapdev, err = m.CreateImageWithLabel(tmpfile.Name(), m.swapsize, "fake-swap")
+	if err != nil {
+		return err
+	}
+	mkswap := exec.Command("mkswap", tmpfile.Name())
+	return mkswap.Run()
+}
+
 func (m *Machine) cleanup() {
 	if m.scratchfile != "" {
 		os.Remove(m.scratchfile)
 	}
 
+	if m.swapfile != "" {
+		os.Remove(m.swapfile)
+	}
+
 	m.scratchfile = ""
+	m.swapfile = ""
 }
 
 // Start the machine running the given command and adding the extra content to
@@ -585,8 +633,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer os.RemoveAll(tmpdir)
 
-	err = m.setupscratch()
-	if err != nil {
+	if err := m.setupscratch(); err != nil {
+		return -1, err
+	}
+
+	if err := m.setupswap(); err != nil {
 		return -1, err
 	}
 

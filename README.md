@@ -16,6 +16,8 @@ Application Options:
   -c, --cpus=                       Number of CPUs for the fakemachine
   -s, --scratchsize=                On-disk scratch space size (with a unit suffix, e.g. 4G); if unset,
                                     memory backed scratch space is used
+      --swapsize=                   On-disk swap space size (with a unit suffix, e.g. 2G); if unset,
+                                    swap size will be zero
       --show-boot                   Show boot/console messages from the fakemachine
 
 Help Options:

@@ -136,6 +136,28 @@ fi
 	}
 }
 
+func TestSwap(t *testing.T) {
+	t.Parallel()
+	m := CreateMachine(t)
+
+	// We set the size in bytes, while the proc file uses KB
+	m.SetSwap(1024*1024, "")
+	// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
+	// which is not really what fakemachine expects but seems good enough for
+	// testing
+	command := `
+SWAP=$(grep -v Filename /proc/swaps | awk ' { print $3 } ' )
+if [ ${SWAP} -lt 900 -o ${SWAP} -gt 1024 ] ; then
+  exit 1
+fi
+`
+	exitcode, _ := m.Run(command)
+
+	if exitcode != 0 {
+		t.Fatalf("Test for swap file failed with %d", exitcode)
+	}
+}
+
 func TestSpawnMachine(t *testing.T) {
 	t.Parallel()
 	if InMachine() {
