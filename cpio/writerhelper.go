@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/surma/gocpio"
+	"github.com/go-debos/gocpio"
 )
 
 type WriterHelper struct {
