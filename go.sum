@@ -9,8 +9,6 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.1 h1:5TQK59W5E3v0r2duFAb7P95B6hEeOyEnHRa8MjYSMTY=
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/surma/gocpio v1.0.1 h1:HnInWgjqytAdpXFbP/xBSa8haIIfDxAxV4gRWFRM1wk=
-github.com/surma/gocpio v1.0.1/go.mod h1:zaLNaN+EDnfSnNdWPJJf9OZxWF817w5dt8JNzF9LCVI=
 github.com/surma/gocpio v1.0.2-0.20130630172628-c01aebd00e02 h1:xhjtJ97hccFQZf4wmBcsVGUmCAmtszrrQ8C5yoK4QmQ=
 github.com/surma/gocpio v1.0.2-0.20130630172628-c01aebd00e02/go.mod h1:zaLNaN+EDnfSnNdWPJJf9OZxWF817w5dt8JNzF9LCVI=
 golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
