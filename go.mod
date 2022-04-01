@@ -1,6 +1,6 @@
 module github.com/go-debos/fakemachine
 
-go 1.11
+go 1.15
 
 require (
 	github.com/docker/go-units v0.4.0
