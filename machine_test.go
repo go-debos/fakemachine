@@ -10,8 +10,19 @@ import (
 	"testing"
 )
 
+func CreateMachine(t *testing.T) *Machine {
+	/* Automatically choose a backend and skip the test if no backends are
+	   supported in this environment. */
+	machine, err := NewMachineWithBackend("auto")
+	if err != nil {
+		t.Skip(err)
+	}
+
+	return machine
+}
+
 func TestSuccessfullCommand(t *testing.T) {
-	m := NewMachine()
+	m := CreateMachine(t)
 
 	exitcode, _ := m.Run("ls /")
 
@@ -21,7 +32,7 @@ func TestSuccessfullCommand(t *testing.T) {
 }
 
 func TestCommandNotFound(t *testing.T) {
-	m := NewMachine()
+	m := CreateMachine(t)
 	exitcode, _ := m.Run("/a/b/c /")
 
 	if exitcode != 127 {
@@ -30,7 +41,7 @@ func TestCommandNotFound(t *testing.T) {
 }
 
 func TestImage(t *testing.T) {
-	m := NewMachine()
+	m := CreateMachine(t)
 
 	m.CreateImage("test.img", 1024*1024)
 	exitcode, _ := m.Run("test -b /dev/vda")
@@ -68,7 +79,7 @@ func TestScratchTmp(t *testing.T) {
 		return
 	}
 
-	m := NewMachine()
+	m := CreateMachine(t)
 
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchTmp"})
 
@@ -83,7 +94,7 @@ func TestScratchDisk(t *testing.T) {
 		return
 	}
 
-	m := NewMachine()
+	m := CreateMachine(t)
 	m.SetScratch(1024*1024*1024, "")
 
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchDisk"})
@@ -94,7 +105,7 @@ func TestScratchDisk(t *testing.T) {
 }
 
 func TestMemory(t *testing.T) {
-	m := NewMachine()
+	m := CreateMachine(t)
 
 	m.SetMemory(1024)
 	// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
@@ -121,7 +132,7 @@ func TestSpawnMachine(t *testing.T) {
 		return
 	}
 
-	m := NewMachine()
+	m := CreateMachine(t)
 
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestSpawnMachine"})
 
@@ -150,7 +161,7 @@ func TestImageLabel(t *testing.T) {
 		return
 	}
 
-	m := NewMachine()
+	m := CreateMachine(t)
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
 	assert.Nil(t, err)
 
