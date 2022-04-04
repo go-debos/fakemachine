@@ -3,51 +3,58 @@ package fakemachine
 import (
 	"bufio"
 	"flag"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func CreateMachine(t *testing.T) *Machine {
-	/* Automatically choose a backend and skip the test if no backends are
-	   supported in this environment. */
-	machine, err := NewMachineWithBackend("auto")
-	if err != nil {
-		t.Skip(err)
-	}
+type FakemachineTestSuite struct {
+	suite.Suite
 
+	backend string
+}
+
+// TODO create the machine automatically before the test using SetupTestSuite
+func (suite *FakemachineTestSuite) CreateMachine() *Machine {
+	machine, err := NewMachineWithBackend(suite.backend)
+	if err != nil {
+		suite.T().Error(err)
+	}
 	return machine
 }
 
-func TestSuccessfullCommand(t *testing.T) {
-	m := CreateMachine(t)
+func (suite *FakemachineTestSuite) TestSuccessfulCommand() {
+	m := suite.CreateMachine()
 
 	exitcode, _ := m.Run("ls /")
 
 	if exitcode != 0 {
-		t.Fatalf("Expected 0 but got %d", exitcode)
+		suite.T().Fatalf("Expected 0 but got %d", exitcode)
 	}
 }
 
-func TestCommandNotFound(t *testing.T) {
-	m := CreateMachine(t)
+func (suite *FakemachineTestSuite) TestCommandNotFound() {
+	suite.T().Skip()
+	m := suite.CreateMachine()
 	exitcode, _ := m.Run("/a/b/c /")
 
 	if exitcode != 127 {
-		t.Fatalf("Expected 127 but got %d", exitcode)
+		suite.T().Fatalf("Expected 127 but got %d", exitcode)
 	}
 }
 
-func TestImage(t *testing.T) {
-	m := CreateMachine(t)
+func (suite *FakemachineTestSuite) TestImage() {
+	m := suite.CreateMachine()
 
 	m.CreateImage("test.img", 1024*1024)
 	exitcode, _ := m.Run("test -b /dev/vda")
 
 	if exitcode != 0 {
-		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
+		suite.T().Fatalf("Test for the virtual image device failed with %d", exitcode)
 	}
 }
 
@@ -73,39 +80,41 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 	}
 }
 
-func TestScratchTmp(t *testing.T) {
+func (suite *FakemachineTestSuite) TestScratchTmp() {
 	if InMachine() {
-		AssertMount(t, "/scratch", "tmpfs")
+		AssertMount(suite.T(), "/scratch", "tmpfs")
 		return
 	}
 
-	m := CreateMachine(t)
+	m := suite.CreateMachine()
 
+	// TODO error: "testing: warning: no tests to run"
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchTmp"})
 
 	if exitcode != 0 {
-		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
+		suite.T().Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
 	}
 }
 
-func TestScratchDisk(t *testing.T) {
+func (suite *FakemachineTestSuite) TestScratchDisk() {
 	if InMachine() {
-		AssertMount(t, "/scratch", "ext4")
+		AssertMount(suite.T(), "/scratch", "ext4")
 		return
 	}
 
-	m := CreateMachine(t)
+	m := suite.CreateMachine()
 	m.SetScratch(1024*1024*1024, "")
 
+	// TODO error: "testing: warning: no tests to run"
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchDisk"})
 
 	if exitcode != 0 {
-		t.Fatalf("Test for device mount on scratch failed with %d", exitcode)
+		suite.T().Fatalf("Test for device mount on scratch failed with %d", exitcode)
 	}
 }
 
-func TestMemory(t *testing.T) {
-	m := CreateMachine(t)
+func (suite *FakemachineTestSuite) TestMemory() {
+	m := suite.CreateMachine()
 
 	m.SetMemory(1024)
 	// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
@@ -121,55 +130,68 @@ fi
 	exitcode, _ := m.Run(command)
 
 	if exitcode != 0 {
-		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
+		suite.T().Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
 	}
 }
 
-func TestSpawnMachine(t *testing.T) {
+func (suite *FakemachineTestSuite) TestSpawnMachine() {
 
 	if InMachine() {
-		t.Log("Running in the machine")
+		suite.T().Log("Running in the machine")
 		return
 	}
 
-	m := CreateMachine(t)
+	m := suite.CreateMachine()
 
+	// TODO error: "testing: warning: no tests to run"
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestSpawnMachine"})
 
 	if exitcode != 0 {
-		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
+		suite.T().Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
 	}
 }
 
-func TestImageLabel(t *testing.T) {
+func (suite *FakemachineTestSuite) TestImageLabel() {
 	if InMachine() {
-		t.Log("Running in the machine")
+		suite.T().Log("Running in the machine")
 		devices := flag.Args()
-		assert.Equal(t, len(devices), 2, "Only expected two devices")
+		assert.Equal(suite.T(), len(devices), 2, "Only expected two devices")
 
 		autolabel := devices[0]
 		labeled := devices[1]
 
 		info, err := os.Stat(autolabel)
-		assert.Nil(t, err)
-		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
 
 		info, err = os.Stat(labeled)
-		assert.Nil(t, err)
-		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
 
 		return
 	}
 
-	m := CreateMachine(t)
+	m := suite.CreateMachine()
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
-	assert.Nil(t, err)
+	assert.Nil(suite.T(), err)
 
 	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
-	assert.Nil(t, err)
+	assert.Nil(suite.T(), err)
 
+	// TODO error: "testing: warning: no tests to run"
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestImageLabel", autolabel, labeled})
 	if exitcode != 0 {
-		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
+		suite.T().Fatalf("Test for images in the machine failed failed with %d", exitcode)
 	}
+}
+
+func TestFakemachineTestSuite(t *testing.T) {
+	// TODO run some tests outside of fakemachine first - finding modules etc?
+	// TODO test auto backend resolution
+	// TODO try to speed up the test by bringing up just one fakemachine per backend?
+
+	// test all backends
+	suite.Run(t, &FakemachineTestSuite{backend: "auto"})
+	suite.Run(t, &FakemachineTestSuite{backend: "kvm"})
+	suite.Run(t, &FakemachineTestSuite{backend: "uml"})
 }
