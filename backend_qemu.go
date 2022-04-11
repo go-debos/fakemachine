@@ -16,36 +16,31 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type kvmBackend struct {
+type qemuBackend struct {
 	machine *Machine
 }
 
-func newKvmBackend(m *Machine) kvmBackend {
-	return kvmBackend{machine: m}
+func newQemuBackend(m *Machine) qemuBackend {
+	return qemuBackend{machine: m}
 }
 
-func (b kvmBackend) Name() string {
-	return "kvm"
+func (b qemuBackend) Name() string {
+	return "qemu"
 }
 
-func (b kvmBackend) Supported() (bool, error) {
-	kvmDevice, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0);
-	if err != nil {
-		return false, err
-	}
-	kvmDevice.Close()
-
+func (b qemuBackend) Supported() (bool, error) {
 	if _, err := b.QemuPath(); err != nil {
 		return false, err
 	}
+
 	return true, nil
 }
 
-func (b kvmBackend) QemuPath() (string, error) {
+func (b qemuBackend) QemuPath() (string, error) {
 	return exec.LookPath("qemu-system-x86_64")
 }
 
-func (b kvmBackend) KernelRelease() (string, error) {
+func (b qemuBackend) KernelRelease() (string, error) {
 	/* First try the kernel the current system is running, but if there are no
 	 * modules for that try the latest from /lib/modules. The former works best
 	 * for systems directly running fakemachine, the latter makes sense in docker
@@ -77,7 +72,7 @@ func (b kvmBackend) KernelRelease() (string, error) {
 	return "", fmt.Errorf("No kernel found")
 }
 
-func (b kvmBackend) hostKernelPath(kernelRelease string) (string, error) {
+func (b qemuBackend) hostKernelPath(kernelRelease string) (string, error) {
 	kernelDir := "/boot"
 	kernelPrefix := "vmlinuz-"
 
@@ -123,7 +118,7 @@ func (b kvmBackend) hostKernelPath(kernelRelease string) (string, error) {
 	return "", fmt.Errorf("No kernel found for release %s", kernelRelease)
 }
 
-func (b kvmBackend) KernelPath() (string, string, error) {
+func (b qemuBackend) KernelPath() (string, string, error) {
 	kernelRelease, err := b.KernelRelease()
 	if err != nil {
 		return "", "", err
@@ -147,7 +142,7 @@ func (b kvmBackend) KernelPath() (string, string, error) {
 	return kernelPath, moddir, nil
 }
 
-func (b kvmBackend) InitrdModules() []string {
+func (b qemuBackend) InitrdModules() []string {
 	return []string{"virtio_console",
 			"virtio",
 			"virtio_pci",
@@ -156,7 +151,7 @@ func (b kvmBackend) InitrdModules() []string {
 			"9pnet_virtio"}
 }
 
-func (b kvmBackend) UdevRules() []string {
+func (b qemuBackend) UdevRules() []string {
 	udevRules := []string{}
 
 	// create symlink under /dev/disk/by-fakemachine-label/ for each virtual image
@@ -169,11 +164,11 @@ func (b kvmBackend) UdevRules() []string {
 	return udevRules
 }
 
-func (b kvmBackend) NetworkdMatch() string {
+func (b qemuBackend) NetworkdMatch() string {
 	return "e*"
 }
 
-func (b kvmBackend) JobOutputTTY() string {
+func (b qemuBackend) JobOutputTTY() string {
 	// By default we send job output to the second virtio console,
 	// reserving /dev/ttyS0 for boot messages (which we ignore)
 	// and /dev/hvc0 for possible use by systemd as a getty
@@ -186,19 +181,23 @@ func (b kvmBackend) JobOutputTTY() string {
 	return "/dev/hvc0"
 }
 
-func (b kvmBackend) MountParameters(mount mountPoint) (string, []string) {
+func (b qemuBackend) MountParameters(mount mountPoint) (string, []string) {
 	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
 }
 
-func (b kvmBackend) InitModules() []string {
+func (b qemuBackend) InitModules() []string {
 	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p"}
 }
 
-func (b kvmBackend) InitStaticVolumes() []mountPoint {
+func (b qemuBackend) InitStaticVolumes() []mountPoint {
 	return []mountPoint{}
 }
 
-func (b kvmBackend) Start() (bool, error) {
+func (b qemuBackend) Start() (bool, error) {
+	return b.StartQemu(false)
+}
+
+func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	m := b.machine
 
 	kernelPath, _, err := b.KernelPath()
@@ -208,14 +207,19 @@ func (b kvmBackend) Start() (bool, error) {
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
 	qemuargs := []string{"qemu-system-x86_64",
-		"-cpu", "host",
 		"-smp", numcpus,
 		"-m", memory,
-		"-enable-kvm",
 		"-kernel", kernelPath,
 		"-initrd", m.initrdpath,
 		"-display", "none",
 		"-no-reboot"}
+
+	if kvm {
+		qemuargs = append(qemuargs,
+		"-cpu", "host",
+		"-enable-kvm")
+	}
+
 	kernelargs := []string{"console=ttyS0", "panic=-1",
 		"systemd.unit=fakemachine.service"}
 
@@ -280,4 +284,30 @@ func (b kvmBackend) Start() (bool, error) {
 	}
 
 	return pstate.Success(), nil
+}
+
+type kvmBackend struct {
+	qemuBackend
+}
+
+func newKvmBackend(m *Machine) kvmBackend {
+	return kvmBackend{qemuBackend{machine: m}}
+}
+
+func (b kvmBackend) Name() string {
+	return "kvm"
+}
+
+func (b kvmBackend) Supported() (bool, error) {
+	kvmDevice, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
+	if err != nil {
+		return false, err
+	}
+	kvmDevice.Close()
+
+	return b.qemuBackend.Supported()
+}
+
+func (b kvmBackend) Start() (bool, error) {
+	return b.StartQemu(true)
 }

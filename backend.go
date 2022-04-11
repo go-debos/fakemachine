@@ -18,23 +18,31 @@ func newBackend(name string, m *Machine) (backend, error) {
 	switch name {
 	case "auto":
 		// select kvm first
-		b, kvm_err := newBackend("kvm", m)
+		kvm, kvm_err := newBackend("kvm", m)
 		if kvm_err == nil {
-			return b, nil
+			return kvm, nil
 		}
 
 		// falling back to uml
-		b, uml_err := newBackend("uml", m)
+		uml, uml_err := newBackend("uml", m)
 		if uml_err == nil {
-			return b, nil
+			return uml, nil
+		}
+
+		// falling back to pure emulated qemu as fallback
+		qemu, qemu_err := newBackend("qemu", m)
+		if qemu_err == nil {
+			return qemu, nil
 		}
 
 		// no backend supported
-		return nil, fmt.Errorf("%v, %v", kvm_err, uml_err)
+		return nil, fmt.Errorf("%v, %v, %v", kvm_err, uml_err, qemu_err)
 	case "kvm":
 		b = newKvmBackend(m)
 	case "uml":
 		b = newUmlBackend(m)
+	case "qemu":
+		b = newQemuBackend(m)
 	default:
 		return nil, fmt.Errorf("%s backend does not exist", name)
 	}
