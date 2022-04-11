@@ -17,11 +17,13 @@ func CreateMachine(t *testing.T) *Machine {
 	if err != nil {
 		t.Skip(err)
 	}
+	machine.SetNumCPUs(2)
 
 	return machine
 }
 
 func TestSuccessfullCommand(t *testing.T) {
+	t.Parallel()
 	m := CreateMachine(t)
 
 	exitcode, _ := m.Run("ls /")
@@ -32,6 +34,7 @@ func TestSuccessfullCommand(t *testing.T) {
 }
 
 func TestCommandNotFound(t *testing.T) {
+	t.Parallel()
 	m := CreateMachine(t)
 	exitcode, _ := m.Run("/a/b/c /")
 
@@ -41,6 +44,7 @@ func TestCommandNotFound(t *testing.T) {
 }
 
 func TestImage(t *testing.T) {
+	t.Parallel()
 	m := CreateMachine(t)
 
 	m.CreateImage("test.img", 1024*1024)
@@ -74,6 +78,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 }
 
 func TestScratchTmp(t *testing.T) {
+	t.Parallel()
 	if InMachine() {
 		AssertMount(t, "/scratch", "tmpfs")
 		return
@@ -89,6 +94,7 @@ func TestScratchTmp(t *testing.T) {
 }
 
 func TestScratchDisk(t *testing.T) {
+	t.Parallel()
 	if InMachine() {
 		AssertMount(t, "/scratch", "ext4")
 		return
@@ -105,6 +111,7 @@ func TestScratchDisk(t *testing.T) {
 }
 
 func TestMemory(t *testing.T) {
+	t.Parallel()
 	m := CreateMachine(t)
 
 	m.SetMemory(1024)
@@ -126,7 +133,7 @@ fi
 }
 
 func TestSpawnMachine(t *testing.T) {
-
+	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
 		return
@@ -142,6 +149,7 @@ func TestSpawnMachine(t *testing.T) {
 }
 
 func TestImageLabel(t *testing.T) {
+	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
