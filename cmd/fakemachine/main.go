@@ -10,14 +10,14 @@ import (
 )
 
 type Options struct {
-	Backend	    string   `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
-	Volumes     []string `short:"v" long:"volume" description:"volume to mount"`
-	Images      []string `short:"i" long:"image" description:"image to add"`
+	Backend     string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
+	Volumes     []string          `short:"v" long:"volume" description:"volume to mount"`
+	Images      []string          `short:"i" long:"image" description:"image to add"`
 	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
-	Memory      int      `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
-	CPUs        int      `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
-	ScratchSize string   `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
-	ShowBoot    bool     `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
+	Memory      int               `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
+	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
+	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
+	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 }
 
 var options Options
@@ -29,8 +29,8 @@ func warnLocalhost(variable string, value string) {
 		    Consider using an address that is valid on your network.`
 
 	if strings.Contains(value, "localhost") ||
-	   strings.Contains(value, "127.0.0.1") ||
-	   strings.Contains(value, "::1") {
+		strings.Contains(value, "127.0.0.1") ||
+		strings.Contains(value, "::1") {
 		fmt.Printf(message, variable)
 	}
 }
@@ -88,7 +88,7 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	// These are the environment variables that will be detected on the
 	// host and propagated to fakemachine. These are listed lower case, but
 	// they are detected and configured in both lower case and upper case.
-	var environ_vars = [...]string {
+	var environ_vars = [...]string{
 		"http_proxy",
 		"https_proxy",
 		"ftp_proxy",

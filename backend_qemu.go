@@ -1,5 +1,5 @@
-// +build linux
-// +build amd64
+//go:build linux && amd64
+// +build linux,amd64
 
 package fakemachine
 
@@ -59,7 +59,7 @@ func (b qemuBackend) KernelRelease() (string, error) {
 		return "", err
 	}
 
-	for i := len(files)-1; i >= 0; i-- {
+	for i := len(files) - 1; i >= 0; i-- {
 		/* Ensure the kernel name starts with a digit, in order
 		 * to filter out 'extramodules-ARCH' on ArchLinux */
 		filename := files[i].Name()
@@ -183,8 +183,8 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 
 	if kvm {
 		qemuargs = append(qemuargs,
-		"-cpu", "host",
-		"-enable-kvm")
+			"-cpu", "host",
+			"-enable-kvm")
 	}
 
 	kernelargs := []string{"console=ttyS0", "panic=-1",
