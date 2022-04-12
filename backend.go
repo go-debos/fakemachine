@@ -1,9 +1,9 @@
-// +build linux
-// +build amd64
+//go:build linux && amd64
+// +build linux,amd64
 
 package fakemachine
 
-import(
+import (
 	"fmt"
 )
 

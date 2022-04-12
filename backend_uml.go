@@ -1,5 +1,5 @@
-// +build linux
-// +build amd64
+//go:build linux && amd64
+// +build linux,amd64
 
 package fakemachine
 
@@ -173,10 +173,9 @@ func (b umlBackend) Start() (bool, error) {
 	}
 	defer umlVectorTransportSocket.Close()
 
-
 	// launch libslirp-helper
 	slirpHelperArgs := []string{"libslirp-helper",
-				    "--exit-with-parent"}
+		"--exit-with-parent"}
 
 	/* attach the slirpHelperSocket as an additional fd to the process,
 	 * after std*. The helper then bridges the host network to the attached
@@ -194,7 +193,6 @@ func (b umlBackend) Start() (bool, error) {
 		return false, err
 	}
 	defer slirpHelper.Kill()
-
 
 	// launch uml guest
 	memory := fmt.Sprintf("%d", m.memory)
@@ -232,7 +230,7 @@ func (b umlBackend) Start() (bool, error) {
 		umlargs = append(umlargs,
 			"con1=fd:0,fd:1",
 			"con0=null",
-			"con=none")       // no other consoles
+			"con=none") // no other consoles
 	}
 
 	for i, img := range m.images {

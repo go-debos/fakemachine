@@ -1,5 +1,5 @@
-// +build linux
-// +build amd64
+//go:build linux && amd64
+// +build linux,amd64
 
 package fakemachine
 
@@ -56,7 +56,7 @@ func getModData(modname string, fieldname string, kernelRelease string) []string
 // Get full path of module
 func getModPath(modname string, kernelRelease string) string {
 	path := getModData(modname, "filename", kernelRelease)
-	if len(path) != 0  {
+	if len(path) != 0 {
 		return path[0]
 	}
 	return ""
@@ -67,7 +67,7 @@ func getModDepends(modname string, kernelRelease string) []string {
 	deplist := getModData(modname, "depends", kernelRelease)
 	var modlist []string
 	for _, v := range deplist {
-		if  v != "" {
+		if v != "" {
 			modlist = append(modlist, strings.Split(v, ",")...)
 		}
 	}
@@ -103,7 +103,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, suff
 			// The suffix is the complete thing - ".ko.foobar"
 			// Reinstate the required ".ko" part, after trimming.
 			basepath := strings.TrimSuffix(modpath, suffix) + ".ko"
-			if err := w.TransformFileTo(modpath, prefix + basepath, fn); err != nil {
+			if err := w.TransformFileTo(modpath, prefix+basepath, fn); err != nil {
 				return err
 			}
 			found = true
@@ -114,7 +114,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, suff
 		return errors.New("Module extension/suffix unknown")
 	}
 
-	copiedModules[modname] = true;
+	copiedModules[modname] = true
 
 	deplist := getModDepends(modname, release)
 	for _, mod := range deplist {
@@ -332,7 +332,7 @@ func tmplStaticVolumes(m Machine) []mountPoint {
 
 func executeInitScriptTemplate(m *Machine, b backend) ([]byte, error) {
 	helperFuncs := template.FuncMap{
-		"MountVolume": tmplMountVolume,
+		"MountVolume":   tmplMountVolume,
 		"StaticVolumes": tmplStaticVolumes,
 	}
 
@@ -478,7 +478,7 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) {
 }
 
 func stripModuleSuffixes(module string, suffixes []string) (string, error) {
-	for _, suffix := range(suffixes) {
+	for _, suffix := range suffixes {
 		if strings.HasSuffix(module, suffix) {
 			// The suffix is the complete thing - ".ko.foobar"
 			// Reinstate the required ".ko" part, after trimming.
@@ -501,8 +501,8 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	output := make([]string, len(keys))
 	release, _ := m.backend.KernelRelease()
 	for i, k := range keys {
-		modpath, _ := stripModuleSuffixes(getModPath(k, release), suffixes)  // CANNOT fail
-		deplist := getModDepends(k, release) // CANNOT fail
+		modpath, _ := stripModuleSuffixes(getModPath(k, release), suffixes) // CANNOT fail
+		deplist := getModDepends(k, release)                                // CANNOT fail
 		deps := make([]string, len(deplist))
 		for j, mod := range deplist {
 			deppath, _ := stripModuleSuffixes(getModPath(mod, release), suffixes) // CANNOT fail
@@ -519,12 +519,11 @@ func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
 
-
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string, modules []string) error {
-	suffixes := map[string]writerhelper.Transformer {
-		".ko": NullDecompressor,
-		".ko.gz": GzipDecompressor,
-		".ko.xz": XzDecompressor,
+	suffixes := map[string]writerhelper.Transformer{
+		".ko":     NullDecompressor,
+		".ko.gz":  GzipDecompressor,
+		".ko.xz":  XzDecompressor,
 		".ko.zst": ZstdDecompressor,
 	}
 
@@ -532,10 +531,10 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 		return nil
 	}
 
-	modfiles := []string {
-			"modules.builtin",
-			"modules.alias",
-			"modules.symbols"}
+	modfiles := []string{
+		"modules.builtin",
+		"modules.alias",
+		"modules.symbols"}
 
 	for _, v := range modfiles {
 		if err := w.CopyFile(moddir + "/" + v); err != nil {
@@ -545,7 +544,7 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 
 	copiedModules := make(map[string]bool)
 
-	for _, modname := range modules  {
+	for _, modname := range modules {
 		if err := m.copyModules(w, modname, suffixes, copiedModules); err != nil {
 			return err
 		}
@@ -596,7 +595,7 @@ func (m *Machine) cleanup() {
 func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
 	defer m.cleanup()
 
-	os.Setenv("PATH", os.Getenv("PATH") + ":/sbin:/usr/sbin")
+	os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin")
 
 	tmpdir, err := ioutil.TempDir("", "fakemachine-")
 	if err != nil {

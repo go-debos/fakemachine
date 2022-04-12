@@ -44,7 +44,7 @@ func checkStreamsMatch(t *testing.T, output, check io.Reader) error {
 }
 
 func decompressorTest(t *testing.T, file, suffix string, d writerhelper.Transformer) {
-	f, err := os.Open(path.Join("testdata", file + suffix))
+	f, err := os.Open(path.Join("testdata", file+suffix))
 	if err != nil {
 		t.Errorf("Unable to open test data: %s", err)
 		return

@@ -1,8 +1,8 @@
 package fakemachine
 
 import (
-	"io"
 	"compress/gzip"
+	"io"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
