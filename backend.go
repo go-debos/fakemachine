@@ -9,7 +9,7 @@ import(
 
 // A list of backends which are implemented
 func BackendNames() []string {
-	return []string{"auto", "kvm", "uml"}
+	return []string{"auto", "kvm", "uml", "qemu"}
 }
 
 func newBackend(name string, m *Machine) (backend, error) {
