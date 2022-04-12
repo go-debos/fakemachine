@@ -47,7 +47,8 @@ func TestImage(t *testing.T) {
 	t.Parallel()
 	m := CreateMachine(t)
 
-	m.CreateImage("test.img", 1024*1024)
+	_, err := m.CreateImage("test.img", 1024*1024)
+	assert.Nil(t, err)
 	exitcode, _ := m.Run("test -b /dev/vda")
 
 	if exitcode != 0 {

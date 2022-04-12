@@ -65,7 +65,11 @@ func decompressorTest(t *testing.T, file, suffix string, d writerhelper.Transfor
 	}
 	defer check_f.Close()
 
-	checkStreamsMatch(t, output, check_f)
+	err = checkStreamsMatch(t, output, check_f)
+	if err != nil {
+		t.Errorf("Failed to compare streams: %s", err)
+		return
+	}
 }
 
 func TestZstd(t *testing.T) {

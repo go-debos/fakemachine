@@ -192,7 +192,7 @@ func (b umlBackend) Start() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer slirpHelper.Kill()
+	defer func() { _ = slirpHelper.Kill() }()
 
 	// launch uml guest
 	memory := fmt.Sprintf("%d", m.memory)

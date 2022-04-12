@@ -25,11 +25,7 @@ import (
 func mergedUsrSystem() bool {
 	f, _ := os.Lstat("/bin")
 
-	if (f.Mode() & os.ModeSymlink) == os.ModeSymlink {
-		return true
-	}
-
-	return false
+	return (f.Mode() & os.ModeSymlink) == os.ModeSymlink
 }
 
 // Parse modinfo output and return the value of module attributes
@@ -456,7 +452,7 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	}
 }
 
-func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) {
+func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
 	if m.scratchfile == "" {
@@ -474,7 +470,8 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) {
 	}
 	fstab = append(fstab, "")
 
-	w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
+	err := w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
+	return err
 }
 
 func stripModuleSuffixes(module string, suffixes []string) (string, error) {
@@ -488,7 +485,7 @@ func stripModuleSuffixes(module string, suffixes []string) (string, error) {
 	return "", errors.New("Module extension/suffix unknown")
 }
 
-func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, suffixes []string, modules map[string]bool) {
+func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, suffixes []string, modules map[string]bool) error {
 	keys := make([]string, len(modules))
 	i := 0
 	for k := range modules {
@@ -512,7 +509,7 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	}
 
 	path := path.Join(moddir, "modules.dep")
-	w.WriteFile(path, strings.Join(output, "\n"), 0644)
+	return w.WriteFile(path, strings.Join(output, "\n"), 0644)
 }
 
 func (m *Machine) SetEnviron(environ []string) {
@@ -557,8 +554,7 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 		i++
 	}
 
-	m.generateModulesDep(w, moddir, suffixKeys, copiedModules)
-	return nil
+	return m.generateModulesDep(w, moddir, suffixKeys, copiedModules)
 }
 
 func (m *Machine) setupscratch() error {
@@ -625,28 +621,45 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	w := writerhelper.NewWriterHelper(f)
 
-	w.WriteDirectory("/scratch", 01777)
-	w.WriteDirectory("/var/tmp", 01777)
-	w.WriteDirectory("/var/lib/dbus", 0755)
+	err = w.WriteDirectories([]writerhelper.WriteDirectory{
+		{Directory: "/scratch", Perm: 01777},
+		{Directory: "/var/tmp", Perm: 01777},
+		{Directory: "/var/lib/dbus", Perm: 0755},
+		{Directory: "/tmp", Perm: 01777},
+		{Directory: "/sys", Perm: 0755},
+		{Directory: "/proc", Perm: 0755},
+		{Directory: "/run", Perm: 0755},
+		{Directory: "/usr", Perm: 0755},
+		{Directory: "/usr/bin", Perm: 0755},
+		{Directory: "/lib64", Perm: 0755},
+	})
+	if err != nil {
+		return -1, err
+	}
 
-	w.WriteDirectory("/tmp", 01777)
-	w.WriteDirectory("/sys", 0755)
-	w.WriteDirectory("/proc", 0755)
-	w.WriteDirectory("/run", 0755)
-	w.WriteDirectory("/usr", 0755)
-	w.WriteDirectory("/usr/bin", 0755)
-	w.WriteDirectory("/lib64", 0755)
-
-	w.WriteSymlink("/run", "/var/run", 0755)
+	err = w.WriteSymlink("/run", "/var/run", 0755)
+	if err != nil {
+		return -1, err
+	}
 
 	if mergedUsrSystem() {
-		w.WriteSymlink("/usr/sbin", "/sbin", 0755)
-		w.WriteSymlink("/usr/bin", "/bin", 0755)
-		w.WriteSymlink("/usr/lib", "/lib", 0755)
+		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
+			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
+			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
+			{Target: "/usr/lib", Link: "/lib", Perm: 0755},
+		})
+		if err != nil {
+			return -1, err
+		}
 	} else {
-		w.WriteDirectory("/sbin", 0755)
-		w.WriteDirectory("/bin", 0755)
-		w.WriteDirectory("/lib", 0755)
+		err = w.WriteDirectories([]writerhelper.WriteDirectory{
+			{Directory: "/sbin", Perm: 0744},
+			{Directory: "/bin", Perm: 0755},
+			{Directory: "/lib", Perm: 0755},
+		})
+		if err != nil {
+			return -1, err
+		}
 	}
 
 	prefix := ""
@@ -684,7 +697,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
-	w.WriteCharDevice("/dev/console", 5, 1, 0700)
+	err = w.WriteCharDevice("/dev/console", 5, 1, 0700)
+	if err != nil {
+		return -1, err
+	}
 
 	// Linker configuration
 	err = w.CopyFile("/etc/ld.so.conf")
@@ -698,8 +714,15 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	// Core system configuration
-	w.WriteFile("/etc/machine-id", "", 0444)
-	w.WriteFile("/etc/hostname", "fakemachine", 0444)
+	err = w.WriteFile("/etc/machine-id", "", 0444)
+	if err != nil {
+		return -1, err
+	}
+
+	err = w.WriteFile("/etc/hostname", "fakemachine", 0444)
+	if err != nil {
+		return -1, err
+	}
 
 	err = w.CopyFile("/etc/passwd")
 	if err != nil {
@@ -718,41 +741,70 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	// udev rules
 	udevRules := strings.Join(backend.UdevRules(), "\n") + "\n"
-	w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
+	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
+	if err != nil {
+		return -1, err
+	}
 
-	w.WriteFile("/etc/systemd/network/ethernet.network",
+	err = w.WriteFile("/etc/systemd/network/ethernet.network",
 		fmt.Sprintf(networkdTemplate, backend.NetworkdMatch()), 0444)
-	w.WriteSymlink(
+	if err != nil {
+		return -1, err
+	}
+
+	err = w.WriteSymlink(
 		"/lib/systemd/resolv.conf",
 		"/etc/resolv.conf",
 		0755)
+	if err != nil {
+		return -1, err
+	}
 
 	err = m.writerKernelModules(w, kernelModuleDir, backend.InitModules())
 	if err != nil {
 		return -1, err
 	}
 
-	w.WriteFile("etc/systemd/system/fakemachine.service",
+	err = w.WriteFile("etc/systemd/system/fakemachine.service",
 		fmt.Sprintf(serviceTemplate, backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
+	if err != nil {
+		return -1, err
+	}
 
-	w.WriteSymlink(
+	err = w.WriteSymlink(
 		"/lib/systemd/system/serial-getty@ttyS0.service",
 		"/dev/null",
 		0755)
+	if err != nil {
+		return -1, err
+	}
 
-	w.WriteFile("/wrapper",
+	err = w.WriteFile("/wrapper",
 		fmt.Sprintf(commandWrapper, backend.Name(), command), 0755)
+	if err != nil {
+		return -1, err
+	}
 
 	init, err := executeInitScriptTemplate(m, backend)
 	if err != nil {
 		return -1, err
 	}
-	w.WriteFileRaw("/init", init, 0755)
 
-	m.generateFstab(w, backend)
+	err = w.WriteFileRaw("/init", init, 0755)
+	if err != nil {
+		return -1, err
+	}
+
+	err = m.generateFstab(w, backend)
+	if err != nil {
+		return -1, err
+	}
 
 	for _, v := range extracontent {
-		w.CopyFileTo(v[0], v[1])
+		err = w.CopyFileTo(v[0], v[1])
+		if err != nil {
+			return -1, err
+		}
 	}
 
 	w.Close()
