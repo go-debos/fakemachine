@@ -14,7 +14,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -493,26 +492,19 @@ func stripCompressionSuffix(module string) (string, error) {
 }
 
 func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) error {
-	keys := make([]string, len(modules))
-	i := 0
-	for k := range modules {
-		keys[i] = k
-		i += 1
-	}
-
-	sort.Strings(keys)
-
-	output := make([]string, len(keys))
+	output := make([]string, len(modules))
 	release, _ := m.backend.KernelRelease()
-	for i, k := range keys {
-		modpath, _ := stripCompressionSuffix(getModPath(k, release)) // CANNOT fail
-		deplist := getModDepends(k, release)                         // CANNOT fail
+	i := 0
+	for mod := range modules {
+		modpath, _ := stripCompressionSuffix(getModPath(mod, release)) // CANNOT fail
+		deplist := getModDepends(mod, release)                         // CANNOT fail
 		deps := make([]string, len(deplist))
-		for j, mod := range deplist {
-			deppath, _ := stripCompressionSuffix(getModPath(mod, release)) // CANNOT fail
+		for j, dep := range deplist {
+			deppath, _ := stripCompressionSuffix(getModPath(dep, release)) // CANNOT fail
 			deps[j] = deppath
 		}
 		output[i] = fmt.Sprintf("%s: %s", modpath, strings.Join(deps, " "))
+		i += 1
 	}
 
 	path := path.Join(moddir, "modules.dep")
