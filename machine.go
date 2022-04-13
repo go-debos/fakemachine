@@ -71,7 +71,14 @@ func getModDepends(modname string, kernelRelease string) []string {
 	return modlist
 }
 
-func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, suffixes map[string]writerhelper.Transformer, copiedModules map[string]bool) error {
+var suffixes = map[string]writerhelper.Transformer{
+	".ko":     NullDecompressor,
+	".ko.gz":  GzipDecompressor,
+	".ko.xz":  XzDecompressor,
+	".ko.zst": ZstdDecompressor,
+}
+
+func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
 	release, _ := m.backend.KernelRelease()
 	modpath := getModPath(modname, release)
 	if modpath == "" {
@@ -114,7 +121,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, suff
 
 	deplist := getModDepends(modname, release)
 	for _, mod := range deplist {
-		if err := m.copyModules(w, mod, suffixes, copiedModules); err != nil {
+		if err := m.copyModules(w, mod, copiedModules); err != nil {
 			return err
 		}
 	}
@@ -474,8 +481,8 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 	return err
 }
 
-func stripModuleSuffixes(module string, suffixes []string) (string, error) {
-	for _, suffix := range suffixes {
+func stripCompressionSuffix(module string) (string, error) {
+	for suffix := range suffixes {
 		if strings.HasSuffix(module, suffix) {
 			// The suffix is the complete thing - ".ko.foobar"
 			// Reinstate the required ".ko" part, after trimming.
@@ -485,7 +492,7 @@ func stripModuleSuffixes(module string, suffixes []string) (string, error) {
 	return "", errors.New("Module extension/suffix unknown")
 }
 
-func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, suffixes []string, modules map[string]bool) error {
+func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) error {
 	keys := make([]string, len(modules))
 	i := 0
 	for k := range modules {
@@ -498,11 +505,11 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	output := make([]string, len(keys))
 	release, _ := m.backend.KernelRelease()
 	for i, k := range keys {
-		modpath, _ := stripModuleSuffixes(getModPath(k, release), suffixes) // CANNOT fail
-		deplist := getModDepends(k, release)                                // CANNOT fail
+		modpath, _ := stripCompressionSuffix(getModPath(k, release)) // CANNOT fail
+		deplist := getModDepends(k, release)                         // CANNOT fail
 		deps := make([]string, len(deplist))
 		for j, mod := range deplist {
-			deppath, _ := stripModuleSuffixes(getModPath(mod, release), suffixes) // CANNOT fail
+			deppath, _ := stripCompressionSuffix(getModPath(mod, release)) // CANNOT fail
 			deps[j] = deppath
 		}
 		output[i] = fmt.Sprintf("%s: %s", modpath, strings.Join(deps, " "))
@@ -517,13 +524,6 @@ func (m *Machine) SetEnviron(environ []string) {
 }
 
 func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir string, modules []string) error {
-	suffixes := map[string]writerhelper.Transformer{
-		".ko":     NullDecompressor,
-		".ko.gz":  GzipDecompressor,
-		".ko.xz":  XzDecompressor,
-		".ko.zst": ZstdDecompressor,
-	}
-
 	if len(modules) == 0 {
 		return nil
 	}
@@ -542,19 +542,12 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 	copiedModules := make(map[string]bool)
 
 	for _, modname := range modules {
-		if err := m.copyModules(w, modname, suffixes, copiedModules); err != nil {
+		if err := m.copyModules(w, modname, copiedModules); err != nil {
 			return err
 		}
 	}
 
-	suffixKeys := make([]string, len(suffixes))
-	i := 0
-	for k := range suffixes {
-		suffixKeys[i] = k
-		i++
-	}
-
-	return m.generateModulesDep(w, moddir, suffixKeys, copiedModules)
+	return m.generateModulesDep(w, moddir, copiedModules)
 }
 
 func (m *Machine) setupscratch() error {
