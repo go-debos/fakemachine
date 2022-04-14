@@ -6,6 +6,7 @@ Creates a vm based on the currently running system.
 
   fakemachine [OPTIONS]
 
+```
 Application Options:
   -b, --backend=[auto|kvm|uml|qemu] Virtualisation backend to use (default: auto)
   -v, --volume=                     volume to mount
@@ -19,3 +20,4 @@ Application Options:
 
 Help Options:
   -h, --help                        Show this help message
+```
