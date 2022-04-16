@@ -7,43 +7,59 @@ import (
 	"fmt"
 )
 
-// A list of backends which are implemented
-func BackendNames() []string {
-	return []string{"auto", "kvm", "uml", "qemu"}
+// List of backends in order of their priority in the "auto" algorithm
+func implementedBackends(m *Machine) []backend {
+	return []backend{
+		newKvmBackend(m),
+		newUmlBackend(m),
+		newQemuBackend(m),
+	}
 }
 
+/* A list of backends which are implemented - sorted in order in which the
+ * "auto" backend chooses them.
+ */
+func BackendNames() []string {
+	names := []string{"auto"}
+
+	for _, backend := range implementedBackends(nil) {
+		names = append(names, backend.Name())
+	}
+
+	return names
+}
+
+/* The "auto" backend loops through each backend, starting with the lowest order.
+ * The backend is created and checked if the creation was successful (i.e. it is
+ * supported on this machine). If so, that backend is used for the fakemachine. If
+ * unsuccessful, the next backend is created until no more backends remain then
+ * an error is thrown explaining why each backend was unsuccessful.
+ */
 func newBackend(name string, m *Machine) (backend, error) {
+	backends := implementedBackends(m)
 	var b backend
+	var err error
 
-	switch name {
-	case "auto":
-		// select kvm first
-		kvm, kvm_err := newBackend("kvm", m)
-		if kvm_err == nil {
-			return kvm, nil
+	if name == "auto" {
+		for _, backend := range backends {
+			backendName := backend.Name()
+			b, backendErr := newBackend(backendName, m)
+			if backendErr != nil {
+				err = fmt.Errorf("%v, %v", err, backendErr)
+				continue
+			}
+			return b, nil
 		}
+		return nil, err
+	}
 
-		// falling back to uml
-		uml, uml_err := newBackend("uml", m)
-		if uml_err == nil {
-			return uml, nil
+	// find backend by name
+	for _, backend := range backends {
+		if backend.Name() == name {
+			b = backend
 		}
-
-		// falling back to pure emulated qemu as fallback
-		qemu, qemu_err := newBackend("qemu", m)
-		if qemu_err == nil {
-			return qemu, nil
-		}
-
-		// no backend supported
-		return nil, fmt.Errorf("%v, %v, %v", kvm_err, uml_err, qemu_err)
-	case "kvm":
-		b = newKvmBackend(m)
-	case "uml":
-		b = newUmlBackend(m)
-	case "qemu":
-		b = newQemuBackend(m)
-	default:
+	}
+	if b == nil {
 		return nil, fmt.Errorf("%s backend does not exist", name)
 	}
 
