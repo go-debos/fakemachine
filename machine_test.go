@@ -10,13 +10,15 @@ import (
 	"testing"
 )
 
+var backendName string
+
+func init() {
+	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
+}
+
 func CreateMachine(t *testing.T) *Machine {
-	/* Automatically choose a backend and skip the test if no backends are
-	   supported in this environment. */
-	machine, err := NewMachineWithBackend("auto")
-	if err != nil {
-		t.Skip(err)
-	}
+	machine, err := NewMachineWithBackend(backendName)
+	assert.Nil(t, err)
 	machine.SetNumCPUs(2)
 
 	return machine
