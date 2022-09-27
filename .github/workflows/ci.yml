@@ -2,9 +2,20 @@ name: Build and Test
 
 on:
   push:
+    branches-ignore:
+      - '*.tmp'
   pull_request:
 
 jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/setup-go@v2
+    - uses: actions/checkout@v2
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+
   test:
     strategy:
       fail-fast: false
@@ -31,3 +42,15 @@ jobs:
 
     - name: Ensure no tests were skipped
       run: "! grep -q SKIP test.out"
+
+  # Job to key the bors success status against
+  bors:
+    name: bors
+    if: success()
+    needs:
+      - golangci
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a success
+        run: exit 0
