@@ -123,14 +123,12 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	}
 
 	// Puts in a format that is compatible with output of os.Environ()
-	if EnvironVars != nil {
-		EnvironString := []string{}
-		for k, v := range EnvironVars {
-			warnLocalhost(k, v)
-			EnvironString = append(EnvironString, fmt.Sprintf("%s=%s", k, v))
-		}
-		m.SetEnviron(EnvironString) // And save the resulting environ vars on m
+	EnvironString := []string{}
+	for k, v := range EnvironVars {
+		warnLocalhost(k, v)
+		EnvironString = append(EnvironString, fmt.Sprintf("%s=%s", k, v))
 	}
+	m.SetEnviron(EnvironString) // And save the resulting environ vars on m
 }
 
 func main() {
