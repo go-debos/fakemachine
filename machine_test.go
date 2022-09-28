@@ -51,7 +51,7 @@ func TestImage(t *testing.T) {
 
 	_, err := m.CreateImage("test.img", 1024*1024)
 	assert.Nil(t, err)
-	exitcode, _ := m.Run("test -b /dev/vda")
+	exitcode, _ := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
 
 	if exitcode != 0 {
 		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
