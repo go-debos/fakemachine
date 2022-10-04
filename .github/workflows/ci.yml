@@ -20,16 +20,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant:
-          - fakemachine-arch
-          - fakemachine-bookworm
-          - fakemachine-bullseye
+        # Currently nested virtualisation (hence kvm) is not supported on GitHub
+        # actions; but the qemu backend is enough to test Fakemachine
+        # functionality without hardware acceleration since the majority of code
+        # is shared between the qemu and kvm backends.
+        # See https://github.com/actions/runner-images/issues/183
+        # 
+        # For Arch Linux uml is not yet supported, so only test under qemu there.
+        os: [bullseye, bookworm]
+        backend: [qemu, uml]
+        include:
+          - os: arch
+            backend: qemu
+    name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
     container:
-      image: ghcr.io/go-debos/test-containers/${{matrix.variant}}:main
+      image: ghcr.io/go-debos/test-containers/fakemachine-${{matrix.os}}:main
+      options: >-
+        --security-opt label=disable
+        --cap-add=SYS_PTRACE
+        --tmpfs /scratch:exec
+    env:
+      TMP: /scratch
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -37,8 +52,8 @@ jobs:
     - name: Test build
       run: go build -o fakemachine cmd/fakemachine/main.go
 
-    - name: Run unit tests
-      run: go test -v ./... | tee test.out
+    - name: Run unit tests (${{matrix.backend}} backend)
+      run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
 
     - name: Ensure no tests were skipped
       run: "! grep -q SKIP test.out"

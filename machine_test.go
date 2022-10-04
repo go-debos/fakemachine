@@ -10,13 +10,15 @@ import (
 	"testing"
 )
 
+var backendName string
+
+func init() {
+	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
+}
+
 func CreateMachine(t *testing.T) *Machine {
-	/* Automatically choose a backend and skip the test if no backends are
-	   supported in this environment. */
-	machine, err := NewMachineWithBackend("auto")
-	if err != nil {
-		t.Skip(err)
-	}
+	machine, err := NewMachineWithBackend(backendName)
+	assert.Nil(t, err)
 	machine.SetNumCPUs(2)
 
 	return machine
@@ -49,7 +51,7 @@ func TestImage(t *testing.T) {
 
 	_, err := m.CreateImage("test.img", 1024*1024)
 	assert.Nil(t, err)
-	exitcode, _ := m.Run("test -b /dev/vda")
+	exitcode, _ := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
 
 	if exitcode != 0 {
 		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
