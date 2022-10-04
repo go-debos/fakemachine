@@ -50,11 +50,14 @@ func (b umlBackend) KernelRelease() (string, error) {
 
 func (b umlBackend) KernelPath() (string, error) {
 	// find the UML binary
-	kernelPath, err := exec.LookPath("linux.uml")
-	if err != nil {
-		return "", fmt.Errorf("user-mode-linux not installed")
+	kernelBinaries := []string{"linux.uml", "vmlinux"}
+	for _, p := range kernelBinaries {
+		if path, err := exec.LookPath(p); err == nil {
+			return path, nil
+		}
 	}
-	return kernelPath, nil
+
+	return "", fmt.Errorf("user-mode-linux not installed")
 }
 
 func (b umlBackend) ModulePath() (string, error) {
