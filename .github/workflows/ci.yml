@@ -33,7 +33,7 @@ jobs:
       run:
         shell: bash
     container:
-      image: ghcr.io/go-debos/test-containers/fakemachine-${{matrix.os}}:main
+      image: ghcr.io/go-debos/test-containers/fakemachine-${{matrix.os}}:wip-obbardc-arch-uml
       options: >-
         --security-opt label=disable
         --cap-add=SYS_PTRACE
