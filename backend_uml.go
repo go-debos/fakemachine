@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -62,23 +63,63 @@ func (b umlBackend) KernelPath() (string, error) {
 
 func (b umlBackend) ModulePath() (string, error) {
 	// make sure the UML modules exist
-	// on non-merged usr systems the modules still reside under /usr/lib/uml
+
+	/* On debian systems, the module reside under the first child directory under
+	 * /usr/lib/uml/modules; on non-merged usr systems the modules still reside
+	 * under /usr/lib/uml
+	 */
 	moddir := "/usr/lib/uml/modules"
-	if _, err := os.Stat(moddir); err != nil {
-		return "", fmt.Errorf("user-mode-linux modules not installed")
+	if _, err := os.Stat(moddir); err == nil {
+		// find the subdirectory containing the modules for the UML release
+		modSubdirs, err := ioutil.ReadDir(moddir)
+		if err != nil {
+			return "", err
+		}
+
+		if len(modSubdirs) != 1 {
+			return "", fmt.Errorf("could not determine which user-mode-linux modules to use")
+		}
+
+		moddir = path.Join(moddir, modSubdirs[0].Name())
+		if _, err := os.Stat(moddir); err != nil {
+			return "", err
+		}
+
+		return moddir, nil
 	}
 
-	// find the subdirectory containing the modules for the UML release
-	modSubdirs, err := ioutil.ReadDir(moddir)
-	if err != nil {
-		return "", err
-	}
-	if len(modSubdirs) != 1 {
-		return "", fmt.Errorf("could not determine which user-mode-linux modules to use")
-	}
-	moddir = path.Join(moddir, modSubdirs[0].Name())
+	/* On Arch systems, however, the modules are stored under /usr/lib/modules/
+	 * with a suffix, "-usermodelinux".
+	 */
+	moddir = "/usr/lib/modules"
+	if _, err := os.Stat(moddir); err == nil {
+		// find the subdirectory containing the modules for the UML release
+		subdirs, err := ioutil.ReadDir(moddir)
+		if err != nil {
+			return "", err
+		}
 
-	return moddir, nil
+		// Build an array of potential user-mode-linux module directories
+		modSubdirs := []string{}
+		for _, subdir := range subdirs {
+			if strings.HasSuffix(subdir.Name(), "-usermodelinux") {
+				modSubdirs = append(modSubdirs, subdir.Name())
+			}
+		}
+
+		if len(modSubdirs) != 1 {
+			return "", fmt.Errorf("could not determine which user-mode-linux modules to use")
+		}
+
+		moddir = path.Join(moddir, modSubdirs[0])
+		if _, err := os.Stat(moddir); err != nil {
+			return "", err
+		}
+
+		return moddir, nil
+	}
+
+	return "", fmt.Errorf("user-mode-linux modules not installed")
 }
 
 func (b umlBackend) SlirpHelperPath() (string, error) {
