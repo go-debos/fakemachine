@@ -24,7 +24,7 @@ func CreateMachine(t *testing.T) *Machine {
 	return machine
 }
 
-func TestSuccessfullCommand(t *testing.T) {
+func TestSuccessfulCommand(t *testing.T) {
 	t.Parallel()
 	m := CreateMachine(t)
 
