@@ -662,6 +662,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
+	/* Ensure systemd-resolved is available */
+	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
+		return -1, err
+	}
+
 	/* Amd64 dynamic linker */
 	err = w.CopyFile("/lib64/ld-linux-x86-64.so.2")
 	if err != nil {
