@@ -3,11 +3,12 @@ package fakemachine
 import (
 	"bufio"
 	"flag"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var backendName string
@@ -18,13 +19,13 @@ func init() {
 
 func CreateMachine(t *testing.T) *Machine {
 	machine, err := NewMachineWithBackend(backendName)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	machine.SetNumCPUs(2)
 
 	return machine
 }
 
-func TestSuccessfullCommand(t *testing.T) {
+func TestSuccessfulCommand(t *testing.T) {
 	t.Parallel()
 	m := CreateMachine(t)
 
@@ -50,7 +51,7 @@ func TestImage(t *testing.T) {
 	m := CreateMachine(t)
 
 	_, err := m.CreateImage("test.img", 1024*1024)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	exitcode, _ := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
 
 	if exitcode != 0 {
@@ -60,21 +61,21 @@ func TestImage(t *testing.T) {
 
 func AssertMount(t *testing.T, mountpoint, fstype string) {
 	m, err := os.Open("/proc/self/mounts")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	mtab := bufio.NewReader(m)
 
 	for {
 		line, err := mtab.ReadString('\n')
 		if err == io.EOF {
-			assert.Fail(t, "mountpoint not found")
+			require.Fail(t, "mountpoint not found")
 			break
 		}
-		assert.Nil(t, err)
+		require.Nil(t, err)
 
 		fields := strings.Fields(line)
 		if fields[1] == mountpoint {
-			assert.Equal(t, fields[2], fstype)
+			require.Equal(t, fields[2], fstype)
 			return
 		}
 	}
@@ -156,28 +157,28 @@ func TestImageLabel(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
-		assert.Equal(t, len(devices), 2, "Only expected two devices")
+		require.Equal(t, len(devices), 2, "Only expected two devices")
 
 		autolabel := devices[0]
 		labeled := devices[1]
 
 		info, err := os.Stat(autolabel)
-		assert.Nil(t, err)
-		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		require.Nil(t, err)
+		require.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
 
 		info, err = os.Stat(labeled)
-		assert.Nil(t, err)
-		assert.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		require.Nil(t, err)
+		require.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
 
 		return
 	}
 
 	m := CreateMachine(t)
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestImageLabel", autolabel, labeled})
 	if exitcode != 0 {
