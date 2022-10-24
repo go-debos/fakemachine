@@ -1,4 +1,4 @@
-# fakemchine - fake a machine
+# fakemachine - fake a machine
 
 Creates a vm based on the currently running system.
 
