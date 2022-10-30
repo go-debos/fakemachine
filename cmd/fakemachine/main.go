@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/docker/go-units"
 	"github.com/go-debos/fakemachine"
 	"github.com/jessevdk/go-flags"
-	"os"
-	"strings"
 )
 
 type Options struct {
@@ -18,6 +19,7 @@ type Options struct {
 	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
+	KernelPath  string            `short:"k" long:"kernel" description:"kernel to use"`
 }
 
 var options Options
@@ -173,6 +175,8 @@ func main() {
 	if options.CPUs > 0 {
 		m.SetNumCPUs(options.CPUs)
 	}
+
+	m.SetKernelPath(options.KernelPath)
 
 	command := "/bin/bash"
 	if len(args) > 0 {

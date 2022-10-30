@@ -49,6 +49,11 @@ func (b umlBackend) KernelRelease() (string, error) {
 }
 
 func (b umlBackend) KernelPath() (string, error) {
+	/* override kernel on machine level */
+	if b.machine.kernelpath != "" {
+		return b.machine.kernelpath, nil
+	}
+
 	// find the UML binary
 	kernelPath, err := exec.LookPath("linux.uml")
 	if err != nil {

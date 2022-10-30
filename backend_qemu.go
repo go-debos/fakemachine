@@ -72,6 +72,11 @@ func (b qemuBackend) KernelRelease() (string, error) {
 }
 
 func (b qemuBackend) KernelPath() (string, error) {
+	/* override kernel on machine level */
+	if b.machine.kernelpath != "" {
+		return b.machine.kernelpath, nil
+	}
+
 	/* First we look within the modules directory, as supported by
 	 * various distributions - Arch, Fedora...
 	 *

@@ -168,6 +168,7 @@ type Machine struct {
 	scratchpath string
 	scratchfile string
 	scratchdev  string
+	kernelpath  string
 	initrdpath  string
 }
 
@@ -456,6 +457,10 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	} else {
 		m.scratchpath = path
 	}
+}
+
+func (m *Machine) SetKernelPath(path string) {
+	m.kernelpath = path
 }
 
 func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
