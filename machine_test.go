@@ -132,7 +132,7 @@ fi
 	exitcode, _ := m.Run(command)
 
 	if exitcode != 0 {
-		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
+		t.Fatalf("Test for set memory failed with %d", exitcode)
 	}
 }
 
