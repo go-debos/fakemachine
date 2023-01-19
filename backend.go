@@ -43,6 +43,12 @@ func newBackend(name string, m *Machine) (backend, error) {
 	if name == "auto" {
 		for _, backend := range backends {
 			backendName := backend.Name()
+
+			/* The qemu backend is slow, don't allow users to auto-select it */
+			if backendName == "qemu" {
+				continue
+			}
+
 			b, backendErr := newBackend(backendName, m)
 			if backendErr != nil {
 				err = fmt.Errorf("%v, %v", err, backendErr)
