@@ -217,8 +217,16 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	if _, err := os.Stat("/etc/ca-certificates"); err == nil {
 		m.AddVolume("/etc/ca-certificates")
 	}
+	if _, err := os.Stat("/etc/pki"); err == nil {
+		m.AddVolume("/etc/pki")
+	}
 	if _, err := os.Stat("/etc/ssl"); err == nil {
 		m.AddVolume("/etc/ssl")
+	}
+
+	// Mounts for gnutls (used by wget).
+	if _, err := os.Stat("/etc/crypto-policies"); err == nil {
+		m.AddVolume("/etc/crypto-policies")
 	}
 
 	// Dbus configuration
