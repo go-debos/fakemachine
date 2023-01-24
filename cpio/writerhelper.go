@@ -197,7 +197,7 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 
 	f, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("open failed: %s - %v", src, err)
+		return fmt.Errorf("open failed: %s - %w", src, err)
 	}
 	defer f.Close()
 
