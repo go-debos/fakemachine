@@ -681,7 +681,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	/* Ensure systemd-resolved is available */
-	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
+	if _, err := os.Stat(prefix + "/lib/systemd/systemd-resolved"); err != nil {
 		return -1, err
 	}
 
@@ -689,9 +689,9 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	if m.arch == Arm64 {
 		// arm64 dynamic linker is in /lib:
 		// https://sourceware.org/bugzilla/show_bug.cgi?id=25129
-		dynamicLinker = "/lib/ld-linux-aarch64.so.1"
+		dynamicLinker = prefix + "/lib/ld-linux-aarch64.so.1"
 	} else {
-		dynamicLinker = "/lib64/ld-linux-x86-64.so.2"
+		dynamicLinker = prefix + "/lib64/ld-linux-x86-64.so.2"
 	}
 
 	/* dynamic linker */
