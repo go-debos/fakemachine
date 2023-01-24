@@ -685,23 +685,31 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
-	var dynamicLinker string
+	var glibcDynamicLinker, muslDynamicLinker string
 	if m.arch == Arm64 {
 		// arm64 dynamic linker is in /lib:
 		// https://sourceware.org/bugzilla/show_bug.cgi?id=25129
-		dynamicLinker = prefix + "/lib/ld-linux-aarch64.so.1"
+		glibcDynamicLinker = prefix + "/lib/ld-linux-aarch64.so.1"
+		muslDynamicLinker = prefix + "/lib/ld-musl-aarch64.so.1"
 	} else {
-		dynamicLinker = prefix + "/lib64/ld-linux-x86-64.so.2"
+		glibcDynamicLinker = prefix + "/lib64/ld-linux-x86-64.so.2"
+		muslDynamicLinker = prefix + "/lib64/ld-musl-x86_64.so.1"
 	}
 
-	/* dynamic linker */
-	err = w.CopyFile(dynamicLinker)
+	/* dynamic linkers */
+	err = w.CopyFile(glibcDynamicLinker)
 	if err != nil {
 		return -1, err
 	}
 
+	// Fedora's busybox needs musl
+	err = w.CopyFile(muslDynamicLinker)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return -1, err
+	}
+
 	/* C libraries */
-	libraryDir, err := realDir(dynamicLinker)
+	libraryDir, err := realDir(glibcDynamicLinker)
 	if err != nil {
 		return -1, err
 	}
