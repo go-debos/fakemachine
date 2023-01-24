@@ -1,5 +1,5 @@
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux
+// +build linux
 
 package fakemachine
 
@@ -35,8 +35,18 @@ func (b qemuBackend) Supported() (bool, error) {
 	return true, nil
 }
 
+var qemuBinaryNames = map[Arch]string{
+	Amd64: "qemu-system-x86_64",
+	Arm64: "qemu-system-aarch64",
+}
+
 func (b qemuBackend) QemuPath() (string, error) {
-	return exec.LookPath("qemu-system-x86_64")
+	binary, ok := qemuBinaryNames[b.machine.arch]
+	if !ok {
+		return "", fmt.Errorf("unsupported arch for qemu: %s", b.machine.arch)
+	}
+
+	return exec.LookPath(binary)
 }
 
 func (b qemuBackend) KernelRelease() (string, error) {
@@ -173,7 +183,7 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
-	qemuargs := []string{"qemu-system-x86_64",
+	qemuargs := []string{qemuBinaryNames[m.arch],
 		"-smp", numcpus,
 		"-m", memory,
 		"-kernel", kernelPath,
@@ -185,6 +195,14 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		qemuargs = append(qemuargs,
 			"-cpu", "host",
 			"-enable-kvm")
+	}
+
+	if m.arch == Arm64 {
+		qemuargs = append(qemuargs, "-machine", "virt")
+		if !kvm {
+			// QEMU uses a 32-bit CPU by default, so override it.
+			qemuargs = append(qemuargs, "-cpu", "cortex-a53")
+		}
 	}
 
 	kernelargs := []string{"console=ttyS0", "panic=-1",

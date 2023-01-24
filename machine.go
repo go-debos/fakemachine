@@ -1,5 +1,5 @@
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux
+// +build linux
 
 package fakemachine
 
@@ -142,6 +142,18 @@ func realDir(path string) (string, error) {
 	return filepath.Dir(p), nil
 }
 
+type Arch string
+
+const (
+	Amd64 Arch = "amd64"
+	Arm64      = "arm64"
+)
+
+var archMap = map[string]Arch{
+	"amd64": Amd64,
+	"arm64": Arm64,
+}
+
 type mountPoint struct {
 	hostDirectory    string
 	machineDirectory string
@@ -155,6 +167,7 @@ type image struct {
 }
 
 type Machine struct {
+	arch     Arch
 	backend  backend
 	mounts   []mountPoint
 	count    int
@@ -180,6 +193,11 @@ func NewMachine() (*Machine, error) {
 func NewMachineWithBackend(backendName string) (*Machine, error) {
 	var err error
 	m := &Machine{memory: 2048, numcpus: runtime.NumCPU()}
+
+	var ok bool
+	if m.arch, ok = archMap[runtime.GOARCH]; !ok {
+		return nil, fmt.Errorf("unsupported arch %s", runtime.GOARCH)
+	}
 
 	m.backend, err = newBackend(backendName, m)
 	if err != nil {
@@ -667,21 +685,39 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
-	/* Amd64 dynamic linker */
-	err = w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+	var dynamicLinker string
+	if m.arch == Arm64 {
+		// arm64 dynamic linker is in /lib:
+		// https://sourceware.org/bugzilla/show_bug.cgi?id=25129
+		dynamicLinker = "/lib/ld-linux-aarch64.so.1"
+	} else {
+		dynamicLinker = "/lib64/ld-linux-x86-64.so.2"
+	}
+
+	/* dynamic linker */
+	err = w.CopyFile(dynamicLinker)
 	if err != nil {
 		return -1, err
 	}
 
 	/* C libraries */
-	libraryDir, err := realDir("/lib64/ld-linux-x86-64.so.2")
+	libraryDir, err := realDir(dynamicLinker)
 	if err != nil {
 		return -1, err
 	}
+
 	err = w.CopyFile(libraryDir + "/libc.so.6")
+	if err != nil && errors.Is(err, os.ErrNotExist) && m.arch == Arm64 && strings.HasSuffix(libraryDir, "/lib") {
+		// Because the dynamic linker is in /lib, on systems with a separate
+		// lib64, it might actually be a in a different folder from libc. In
+		// that case, try using the lib64 directory.
+		libraryDir += "64"
+		err = w.CopyFile(libraryDir + "/libc.so.6")
+	}
 	if err != nil {
 		return -1, err
 	}
+
 	err = w.CopyFile(libraryDir + "/libresolv.so.2")
 	if err != nil {
 		return -1, err
