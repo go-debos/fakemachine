@@ -272,8 +272,7 @@ if [ $? != 0 ]; then
   exit
 fi
 
-echo Running '%[2]s' using '%[1]s' backend
-%[2]s
+%[1]s
 echo $? > /run/fakemachine/result
 `
 
@@ -770,7 +769,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	err = w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, backend.Name(), command), 0755)
+		fmt.Sprintf(commandWrapper, command), 0755)
 	if err != nil {
 		return -1, err
 	}
@@ -800,6 +799,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.Close()
 	f.Close()
 
+	fmt.Printf("Running %s using %s backend\n", command, backend.Name())
 	success, err := backend.Start()
 	if !success || err != nil {
 		return -1, fmt.Errorf("error starting %s backend: %v", backend.Name(), err)
