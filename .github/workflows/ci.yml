@@ -4,6 +4,9 @@ on:
   push:
     branches-ignore:
       - '*.tmp'
+  # Build at 04:00am every Monday
+  schedule:
+    - cron: "0 4 * * 1"
   pull_request:
 
 jobs:
