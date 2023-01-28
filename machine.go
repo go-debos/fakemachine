@@ -293,7 +293,7 @@ Environment=HOME=/root IN_FAKE_MACHINE=yes %[2]s
 WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
-ExecStopPost=/bin/systemctl poweroff -ff
+ExecStopPost=/bin/systemctl poweroff -q -ff
 Type=idle
 TTYPath=%[1]s
 StandardInput=tty-force
