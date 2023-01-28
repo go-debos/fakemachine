@@ -18,6 +18,7 @@ type Options struct {
 	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
+	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
 }
 
 var options Options
@@ -77,7 +78,9 @@ func SetupImages(m *fakemachine.Machine, options Options) {
 			os.Exit(1)
 		}
 
-		fmt.Printf("Exposing %s as %s\n", parts[0], l)
+		if !options.Quiet {
+			fmt.Printf("Exposing %s as %s\n", parts[0], l)
+		}
 	}
 }
 
@@ -153,6 +156,7 @@ func main() {
 	}
 
 	m.SetShowBoot(options.ShowBoot)
+	m.SetQuiet(options.Quiet)
 	SetupVolumes(m, options)
 	SetupImages(m, options)
 	SetupEnviron(m, options)

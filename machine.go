@@ -162,6 +162,7 @@ type Machine struct {
 	memory   int
 	numcpus  int
 	showBoot bool
+	quiet    bool
 	Environ  []string
 
 	scratchsize int64
@@ -443,6 +444,13 @@ func (m *Machine) SetNumCPUs(numcpus int) {
 // SetShowBoot sets whether to show boot/console messages from the fakemachine.
 func (m *Machine) SetShowBoot(showBoot bool) {
 	m.showBoot = showBoot
+}
+
+// SetQuiet sets whether fakemachine should print additional information (e.g.
+// the command to be ran) or just print the stdout/stderr of the command to be
+// ran.
+func (m *Machine) SetQuiet(quiet bool) {
+	m.quiet = quiet
 }
 
 // SetScratch sets the size and location of on-disk scratch space to allocate
@@ -799,7 +807,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	w.Close()
 	f.Close()
 
-	fmt.Printf("Running %s using %s backend\n", command, backend.Name())
+	if !m.quiet {
+		fmt.Printf("Running %s using %s backend\n", command, backend.Name())
+	}
+
 	success, err := backend.Start()
 	if !success || err != nil {
 		return -1, fmt.Errorf("error starting %s backend: %v", backend.Name(), err)
