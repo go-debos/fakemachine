@@ -163,6 +163,7 @@ type Machine struct {
 	memory   int
 	numcpus  int
 	showBoot bool
+	quiet    bool
 	Environ  []string
 
 	scratchsize int64
@@ -273,8 +274,7 @@ if [ $? != 0 ]; then
   exit
 fi
 
-echo Running '%[2]s' using '%[1]s' backend
-%[2]s
+%[1]s
 echo $? > /run/fakemachine/result
 `
 
@@ -295,7 +295,7 @@ Environment=HOME=/root IN_FAKE_MACHINE=yes %[2]s
 WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
-ExecStopPost=/bin/systemctl poweroff -ff
+ExecStopPost=/bin/systemctl poweroff -q -ff
 Type=idle
 TTYPath=%[1]s
 StandardInput=tty-force
@@ -445,6 +445,13 @@ func (m *Machine) SetNumCPUs(numcpus int) {
 // SetShowBoot sets whether to show boot/console messages from the fakemachine.
 func (m *Machine) SetShowBoot(showBoot bool) {
 	m.showBoot = showBoot
+}
+
+// SetQuiet sets whether fakemachine should print additional information (e.g.
+// the command to be ran) or just print the stdout/stderr of the command to be
+// ran.
+func (m *Machine) SetQuiet(quiet bool) {
+	m.quiet = quiet
 }
 
 // SetScratch sets the size and location of on-disk scratch space to allocate
@@ -790,7 +797,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	err = w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, backend.Name(), command), 0755)
+		fmt.Sprintf(commandWrapper, command), 0755)
 	if err != nil {
 		return -1, err
 	}
@@ -819,6 +826,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	w.Close()
 	f.Close()
+
+	if !m.quiet {
+		fmt.Printf("Running %s using %s backend\n", command, backend.Name())
+	}
 
 	success, err := backend.Start()
 	if !success || err != nil {
