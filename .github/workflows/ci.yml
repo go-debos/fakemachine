@@ -20,6 +20,23 @@ jobs:
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v3
 
+  man-page:
+    name: Check if man page has been regenerated
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name:
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pandoc
+
+        # Don't check the diff of the final manpage, instead check the
+        # intermediate markdownfile  instead as it is a lot less likely to
+        # drastically change with different versions of pandoc etc.
+        cd doc/man/ && ./create_manpage.sh
+        git checkout *.1
+        git diff --exit-code
+
   test:
     strategy:
       fail-fast: false
@@ -68,6 +85,7 @@ jobs:
     if: success()
     needs:
       - golangci
+      - man-page
       - test
     runs-on: ubuntu-latest
     steps:

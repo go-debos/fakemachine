@@ -1,8 +1,13 @@
-# fakemachine - fake a machine
+% fakemachine(1)
+
+# NAME
+
+fakemachine - fake a machine
+
 
 Creates a virtual machine based on the currently running system.
 
-## Synopsis
+# SYNOPSIS
 
 ```
 fakemachine [options] <command to run inside machine>
