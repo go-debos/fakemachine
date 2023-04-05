@@ -843,7 +843,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	success, err := backend.Start()
 	if !success || err != nil {
-		return -1, fmt.Errorf("error starting %s backend: %v", backend.Name(), err)
+		return -1, fmt.Errorf("error starting %s backend: %w", backend.Name(), err)
 	}
 
 	result, err := os.Open(path.Join(tmpdir, "result"))
@@ -877,7 +877,7 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	executable, err := exec.LookPath(os.Args[0])
 
 	if err != nil {
-		return -1, fmt.Errorf("Failed to find executable: %v\n", err)
+		return -1, fmt.Errorf("Failed to find executable: %w\n", err)
 	}
 
 	return m.startup(command, [][2]string{{executable, name}})
