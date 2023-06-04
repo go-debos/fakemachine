@@ -68,6 +68,16 @@ func getModDepends(modname string, kernelRelease string) []string {
 		}
 	}
 
+	// Busybox expects a full dependency list for each module rather than just
+	// direct dependencies, so recurse the module dependency tree:
+	// https://github.com/mirror/busybox/blob/1dd2685dcc735496d7adde87ac60b9434ed4a04c/modutils/modprobe.c#L46-L49
+	var sublist []string
+	for _, mod := range modlist {
+		sublist = append(sublist, getModDepends(mod, kernelRelease)...)
+	}
+
+	modlist = append(modlist, sublist...)
+
 	return modlist
 }
 
