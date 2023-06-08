@@ -46,7 +46,7 @@ jobs:
         # functionality without hardware acceleration since the majority of code
         # is shared between the qemu and kvm backends.
         # See https://github.com/actions/runner-images/issues/183
-        # 
+        #
         # For Arch Linux uml is not yet supported, so only test under qemu there.
         os: [bullseye, bookworm]
         backend: [qemu, uml]
@@ -79,15 +79,17 @@ jobs:
     - name: Ensure no tests were skipped
       run: "! grep -q SKIP test.out"
 
-  # Job to key the bors success status against
-  bors:
-    name: bors
-    if: success()
+  # Job to key success status against
+  allgreen:
+    name: allgreen
+    if: always()
     needs:
       - golangci
       - man-page
       - test
     runs-on: ubuntu-latest
     steps:
-      - name: Mark the job as a success
-        run: exit 0
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
