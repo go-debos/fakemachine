@@ -92,7 +92,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 	release, _ := m.backend.KernelRelease()
 	modpath := getModPath(modname, release)
 	if modpath == "" {
-		return errors.New("Modules path couldn't be determined")
+		return errors.New("modules path couldn't be determined")
 	}
 
 	if modpath == "(builtin)" || copiedModules[modname] {
@@ -124,7 +124,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 		}
 	}
 	if !found {
-		return errors.New("Module extension/suffix unknown")
+		return errors.New("module extension/suffix unknown")
 	}
 
 	copiedModules[modname] = true
@@ -405,12 +405,12 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 	}
 
 	if len(label) >= 20 {
-		return "", fmt.Errorf("Label '%s' too long; cannot be more then 20 characters", label)
+		return "", fmt.Errorf("label '%s' too long; cannot be more then 20 characters", label)
 	}
 
 	for _, image := range m.images {
 		if image.label == label {
-			return "", fmt.Errorf("Label '%s' already exists", label)
+			return "", fmt.Errorf("label '%s' already exists", label)
 		}
 	}
 
@@ -506,7 +506,7 @@ func stripCompressionSuffix(module string) (string, error) {
 			return strings.TrimSuffix(module, suffix) + ".ko", nil
 		}
 	}
-	return "", errors.New("Module extension/suffix unknown")
+	return "", errors.New("module extension/suffix unknown")
 }
 
 func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) error {
@@ -601,17 +601,17 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		/* Check the directory exists on the host */
 		stat, err := os.Stat(v.hostDirectory)
 		if err != nil || !stat.IsDir() {
-			return -1, fmt.Errorf("Couldn't mount %s inside machine: expected a directory", v.hostDirectory)
+			return -1, fmt.Errorf("couldn't mount %s inside machine: expected a directory", v.hostDirectory)
 		}
 
 		/* Check for whitespace in the machine directory */
 		if regexp.MustCompile(`\s`).MatchString(v.machineDirectory) {
-			return -1, fmt.Errorf("Couldn't mount %s inside machine: machine directory (%s) contains whitespace", v.hostDirectory, v.machineDirectory)
+			return -1, fmt.Errorf("couldn't mount %s inside machine: machine directory (%s) contains whitespace", v.hostDirectory, v.machineDirectory)
 		}
 
 		/* Check for whitespace in the label */
 		if regexp.MustCompile(`\s`).MatchString(v.label) {
-			return -1, fmt.Errorf("Couldn't mount %s inside machine: label (%s) contains whitespace", v.hostDirectory, v.label)
+			return -1, fmt.Errorf("couldn't mount %s inside machine: label (%s) contains whitespace", v.hostDirectory, v.label)
 		}
 	}
 
@@ -877,7 +877,7 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	executable, err := exec.LookPath(os.Args[0])
 
 	if err != nil {
-		return -1, fmt.Errorf("Failed to find executable: %w\n", err)
+		return -1, fmt.Errorf("failed to find executable: %w", err)
 	}
 
 	return m.startup(command, [][2]string{{executable, name}})

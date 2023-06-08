@@ -91,7 +91,7 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	// These are the environment variables that will be detected on the
 	// host and propagated to fakemachine. These are listed lower case, but
 	// they are detected and configured in both lower case and upper case.
-	var environ_vars = [...]string{
+	var environVars = [...]string{
 		"http_proxy",
 		"https_proxy",
 		"ftp_proxy",
@@ -101,7 +101,7 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	}
 
 	// First add variables from host
-	for _, e := range environ_vars {
+	for _, e := range environVars {
 		lowerVar := strings.ToLower(e) // lowercase not really needed
 		lowerVal := os.Getenv(lowerVar)
 		if lowerVal != "" {

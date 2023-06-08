@@ -58,14 +58,14 @@ func decompressorTest(t *testing.T, file, suffix string, d writerhelper.Transfor
 		return
 	}
 
-	check_f, err := os.Open(path.Join("testdata", file))
+	checkFile, err := os.Open(path.Join("testdata", file))
 	if err != nil {
 		t.Errorf("Unable to open check data: %s", err)
 		return
 	}
-	defer check_f.Close()
+	defer checkFile.Close()
 
-	err = checkStreamsMatch(t, output, check_f)
+	err = checkStreamsMatch(t, output, checkFile)
 	if err != nil {
 		t.Errorf("Failed to compare streams: %s", err)
 		return

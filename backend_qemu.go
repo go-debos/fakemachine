@@ -68,7 +68,7 @@ func (b qemuBackend) KernelRelease() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("No kernel found")
+	return "", fmt.Errorf("kernel not found")
 }
 
 func (b qemuBackend) KernelPath() (string, error) {
