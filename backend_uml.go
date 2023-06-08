@@ -45,7 +45,7 @@ func (b umlBackend) Supported() (bool, error) {
 }
 
 func (b umlBackend) KernelRelease() (string, error) {
-	return "", errors.New("Not implemented")
+	return "", errors.New("not implemented")
 }
 
 func (b umlBackend) KernelPath() (string, error) {
@@ -162,7 +162,7 @@ func (b umlBackend) Start() (bool, error) {
 	// one of the sockets will be attached to the slirp-helper
 	slirpHelperSocket := os.NewFile(uintptr(netSocketpair[0]), "")
 	if slirpHelperSocket == nil {
-		return false, fmt.Errorf("Creation of slirpHelperSocket failed")
+		return false, fmt.Errorf("creation of slirpHelperSocket failed")
 	}
 	defer slirpHelperSocket.Close()
 
