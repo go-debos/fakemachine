@@ -1,4 +1,5 @@
 linters:
   enable:
     - gofmt
+    - stylecheck
     - whitespace
