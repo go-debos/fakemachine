@@ -1,5 +1,4 @@
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux && (arm64 || amd64)
 
 package fakemachine
 
@@ -153,6 +152,23 @@ func realDir(path string) (string, error) {
 	return filepath.Dir(p), nil
 }
 
+type Arch string
+
+const (
+	Amd64 Arch = "amd64"
+	Arm64 Arch = "arm64"
+)
+
+var archMap = map[string]Arch{
+	"amd64": Amd64,
+	"arm64": Arm64,
+}
+
+var archDynamicLinker = map[Arch]string{
+	Amd64: "/lib64/ld-linux-x86-64.so.2",
+	Arm64: "/lib/ld-linux-aarch64.so.1",
+}
+
 type mountPoint struct {
 	hostDirectory    string
 	machineDirectory string
@@ -166,6 +182,7 @@ type image struct {
 }
 
 type Machine struct {
+	arch     Arch
 	backend  backend
 	mounts   []mountPoint
 	count    int
@@ -192,6 +209,11 @@ func NewMachine() (*Machine, error) {
 func NewMachineWithBackend(backendName string) (*Machine, error) {
 	var err error
 	m := &Machine{memory: 2048, numcpus: runtime.NumCPU()}
+
+	var ok bool
+	if m.arch, ok = archMap[runtime.GOARCH]; !ok {
+		return nil, fmt.Errorf("unsupported arch %s", runtime.GOARCH)
+	}
 
 	m.backend, err = newBackend(backendName, m)
 	if err != nil {
@@ -669,6 +691,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
 			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
 			{Target: "/usr/lib", Link: "/lib", Perm: 0755},
+			{Target: "/usr/lib64", Link: "/lib64", Perm: 0755},
 		})
 		if err != nil {
 			return -1, err
@@ -704,14 +727,14 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
-	/* Amd64 dynamic linker */
-	err = w.CopyFile("/lib64/ld-linux-x86-64.so.2")
+	dynamicLinker := archDynamicLinker[m.arch]
+	err = w.CopyFile(prefix + dynamicLinker)
 	if err != nil {
 		return -1, err
 	}
 
 	/* C libraries */
-	libraryDir, err := realDir("/lib64/ld-linux-x86-64.so.2")
+	libraryDir, err := realDir(dynamicLinker)
 	if err != nil {
 		return -1, err
 	}

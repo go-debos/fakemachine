@@ -1,5 +1,5 @@
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux
+// +build linux
 
 package fakemachine
 
@@ -27,6 +27,11 @@ func (b umlBackend) Name() string {
 }
 
 func (b umlBackend) Supported() (bool, error) {
+	// only support amd64
+	if b.machine.arch != Amd64 {
+		return false, fmt.Errorf("unsupported arch: %s", b.machine.arch)
+	}
+
 	// check the kernel exists
 	if _, err := b.KernelPath(); err != nil {
 		return false, err
