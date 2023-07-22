@@ -1,5 +1,4 @@
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux && (arm64 || amd64)
 
 package fakemachine
 
@@ -35,8 +34,40 @@ func (b qemuBackend) Supported() (bool, error) {
 	return true, nil
 }
 
+type qemuMachine struct {
+	binary  string
+	console string
+	machine string
+	/* Cpu to use for qemu backend if the architecture doesn't have a good default */
+	qemuCPU string
+}
+
+var qemuMachines = map[Arch]qemuMachine{
+	Amd64: {
+		binary:  "qemu-system-x86_64",
+		console: "ttyS0",
+		machine: "pc",
+	},
+	Arm64: {
+		binary:  "qemu-system-aarch64",
+		console: "ttyAMA0",
+		machine: "virt",
+		/* The default cpu is a 32 bit one, which isn't very usefull
+		 * for 64 bit arm. There is no cpu setting for "minimal" 64
+		 * bit linux capable processor. The only generic setting
+		 * is "max", but that can be very slow to emulate. So pick
+		 * a specific small cortex-a processor instead */
+		qemuCPU: "cortex-a53",
+	},
+}
+
 func (b qemuBackend) QemuPath() (string, error) {
-	return exec.LookPath("qemu-system-x86_64")
+	machine, ok := qemuMachines[b.machine.arch]
+	if !ok {
+		return "", fmt.Errorf("unsupported arch for qemu: %s", b.machine.arch)
+	}
+
+	return exec.LookPath(machine.binary)
 }
 
 func (b qemuBackend) KernelRelease() (string, error) {
@@ -166,6 +197,7 @@ func (b qemuBackend) Start() (bool, error) {
 
 func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	m := b.machine
+	qemuMachine := qemuMachines[m.arch]
 
 	kernelPath, err := b.KernelPath()
 	if err != nil {
@@ -173,7 +205,7 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
-	qemuargs := []string{"qemu-system-x86_64",
+	qemuargs := []string{qemuMachine.binary,
 		"-smp", numcpus,
 		"-m", memory,
 		"-kernel", kernelPath,
@@ -185,9 +217,13 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		qemuargs = append(qemuargs,
 			"-cpu", "host",
 			"-enable-kvm")
+	} else if qemuMachine.qemuCPU != "" {
+		qemuargs = append(qemuargs, "-cpu", qemuMachine.qemuCPU)
 	}
 
-	kernelargs := []string{"console=ttyS0", "panic=-1",
+	qemuargs = append(qemuargs, "-machine", qemuMachine.machine)
+	console := fmt.Sprintf("console=%s", qemuMachine.console)
+	kernelargs := []string{console, "panic=-1",
 		"systemd.unit=fakemachine.service"}
 
 	if m.showBoot {
