@@ -51,7 +51,15 @@ func newBackend(name string, m *Machine) (backend, error) {
 
 			b, backendErr := newBackend(backendName, m)
 			if backendErr != nil {
-				err = fmt.Errorf("%v, %v", err, backendErr)
+				/* Append the error to any existing backend creation error(s).
+				 * Since we cannot join errors together in golang <1.20, instead
+				 * join the error messages strings and return that as a new error.
+				 */
+				if err != nil {
+					err = fmt.Errorf("%v, %v", err.Error(), backendErr.Error())
+				} else {
+					err = backendErr
+				}
 				continue
 			}
 			return b, nil
