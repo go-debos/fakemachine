@@ -51,7 +51,12 @@ func newBackend(name string, m *Machine) (backend, error) {
 
 			b, backendErr := newBackend(backendName, m)
 			if backendErr != nil {
-				err = fmt.Errorf("%v, %v", err, backendErr)
+				/* Append the error to existing error */
+				if err != nil {
+					err = fmt.Errorf("%w, %w", err, backendErr)
+				} else {
+					err = fmt.Errorf("%w", backendErr)
+				}
 				continue
 			}
 			return b, nil
