@@ -225,6 +225,7 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	qemuargs = append(qemuargs, "-machine", qemuMachine.machine)
 	console := fmt.Sprintf("console=%s", qemuMachine.console)
 	kernelargs := []string{console, "panic=-1",
+		"plymouth.enable=0",
 		"systemd.unit=fakemachine.service"}
 
 	if m.showBoot {

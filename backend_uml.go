@@ -205,7 +205,7 @@ func (b umlBackend) Start() (bool, error) {
 		"mem=" + memory + "M",
 		"initrd=" + m.initrdpath,
 		"panic=-1",
-		"nosplash",
+		"plymouth.enable=0",
 		"systemd.unit=fakemachine.service",
 		"console=tty0",
 	}
