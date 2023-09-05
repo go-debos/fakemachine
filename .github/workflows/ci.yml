@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/setup-go@v4
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v3
 
@@ -24,7 +24,7 @@ jobs:
     name: Check if man page has been regenerated
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name:
       run: |
         sudo apt-get update
@@ -68,7 +68,7 @@ jobs:
       TMP: /scratch
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Test build
       run: go build -o fakemachine cmd/fakemachine/main.go
