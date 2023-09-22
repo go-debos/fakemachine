@@ -184,7 +184,7 @@ func (b qemuBackend) MountParameters(mount mountPoint) (string, []string) {
 }
 
 func (b qemuBackend) InitModules() []string {
-	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p"}
+	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p", "e1000"}
 }
 
 func (b qemuBackend) InitStaticVolumes() []mountPoint {
