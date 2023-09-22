@@ -211,6 +211,7 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		"-kernel", kernelPath,
 		"-initrd", m.initrdpath,
 		"-display", "none",
+		"-nic", "user,model=virtio-net-pci",
 		"-no-reboot"}
 
 	if kvm {
