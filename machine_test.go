@@ -21,6 +21,7 @@ func CreateMachine(t *testing.T) *Machine {
 	machine, err := NewMachineWithBackend(backendName)
 	require.Nil(t, err)
 	machine.SetNumCPUs(2)
+	machine.SetShowBoot(true)
 
 	return machine
 }
