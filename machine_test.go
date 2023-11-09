@@ -12,9 +12,11 @@ import (
 )
 
 var backendName string
+var testArg string
 
 func init() {
 	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
+	flag.StringVar(&testArg, "testarg", "", "Test specific argument")
 }
 
 func CreateMachine(t *testing.T) *Machine {
@@ -216,4 +218,23 @@ func TestVolumes(t *testing.T) {
 	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
 	require.Equal(t, exitcode, -1)
 	require.Error(t, err)
+}
+
+func TestCommandEscaping(t *testing.T) {
+	t.Parallel()
+	if InMachine() {
+		t.Log("Running in the machine")
+		require.Equal(t, testArg, "$s'n\\akes")
+		t.Log(testArg)
+		return
+	}
+
+	m := CreateMachine(t)
+	exitcode, _ := m.RunInMachineWithArgs([]string{
+		"-test.v", "-test.run",
+		"TestCommandEscaping", "-testarg", "$s'n\\akes"})
+
+	if exitcode != 0 {
+		t.Fatalf("Expected 0 but got %d", exitcode)
+	}
 }
