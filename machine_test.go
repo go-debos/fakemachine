@@ -90,7 +90,7 @@ func TestScratchTmp(t *testing.T) {
 
 	m := CreateMachine(t)
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchTmp"})
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchTmp"})
 
 	if exitcode != 0 {
 		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
@@ -107,7 +107,7 @@ func TestScratchDisk(t *testing.T) {
 	m := CreateMachine(t)
 	m.SetScratch(1024*1024*1024, "")
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestScratchDisk"})
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
 
 	if exitcode != 0 {
 		t.Fatalf("Test for device mount on scratch failed with %d", exitcode)
@@ -145,7 +145,7 @@ func TestSpawnMachine(t *testing.T) {
 
 	m := CreateMachine(t)
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestSpawnMachine"})
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestSpawnMachine"})
 
 	if exitcode != 0 {
 		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
@@ -180,7 +180,7 @@ func TestImageLabel(t *testing.T) {
 	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
 	require.Nil(t, err)
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run TestImageLabel", autolabel, labeled})
+	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImageLabel", autolabel, labeled})
 	if exitcode != 0 {
 		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
 	}
@@ -197,7 +197,7 @@ func TestVolumes(t *testing.T) {
 	m := CreateMachine(t)
 	m.AddVolume("random_directory_never_exists")
 
-	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run TestVolumes"})
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
 	require.Equal(t, exitcode, -1)
 	require.Error(t, err)
 
@@ -205,7 +205,7 @@ func TestVolumes(t *testing.T) {
 	m = CreateMachine(t)
 	m.AddVolume("/dev/zero")
 
-	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run TestVolumes"})
+	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
 	require.Equal(t, exitcode, -1)
 	require.Error(t, err)
 
@@ -213,7 +213,7 @@ func TestVolumes(t *testing.T) {
 	m = CreateMachine(t)
 	m.AddVolumeAt("/dev", "/dev ices")
 
-	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run TestVolumes"})
+	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
 	require.Equal(t, exitcode, -1)
 	require.Error(t, err)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/alessio/shellescape"
 	"github.com/docker/go-units"
 	"github.com/go-debos/fakemachine"
 	"github.com/jessevdk/go-flags"
@@ -181,7 +182,7 @@ func main() {
 
 	command := "/bin/bash"
 	if len(args) > 0 {
-		command = strings.Join(args, " ")
+		command = shellescape.QuoteCommand(args)
 	}
 
 	ret, err := m.Run(command)
