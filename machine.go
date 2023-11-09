@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/alessio/shellescape"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -894,8 +895,8 @@ func (m *Machine) Run(command string) (int, error) {
 func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	name := path.Join("/", path.Base(os.Args[0]))
 
-	// FIXME: shell escaping?
-	command := strings.Join(append([]string{name}, args...), " ")
+	quotedArgs := shellescape.QuoteCommand(args)
+	command := strings.Join([]string{name, quotedArgs}, " ")
 
 	executable, err := exec.LookPath(os.Args[0])
 
@@ -909,10 +910,5 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 // RunInMachine runs the caller binary inside the fakemachine with the same
 // commandline arguments as the parent
 func (m *Machine) RunInMachine() (int, error) {
-	name := path.Join("/", path.Base(os.Args[0]))
-
-	// FIXME: shell escaping?
-	command := strings.Join(append([]string{name}, os.Args[1:]...), " ")
-
-	return m.startup(command, [][2]string{{os.Args[0], name}})
+	return m.RunInMachineWithArgs(os.Args[1:])
 }
