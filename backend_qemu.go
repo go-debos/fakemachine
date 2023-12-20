@@ -162,10 +162,6 @@ func (b qemuBackend) UdevRules() []string {
 	return udevRules
 }
 
-func (b qemuBackend) NetworkdMatch() string {
-	return "e*"
-}
-
 func (b qemuBackend) JobOutputTTY() string {
 	// By default we send job output to the second virtio console,
 	// reserving /dev/ttyS0 for boot messages (which we ignore)

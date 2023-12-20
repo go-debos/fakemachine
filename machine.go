@@ -286,7 +286,7 @@ exec /lib/systemd/systemd
 `
 const networkdTemplate = `
 [Match]
-Name=%[1]s
+Type=ether
 
 [Network]
 DHCP=ipv4
@@ -808,7 +808,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/ethernet.network",
-		fmt.Sprintf(networkdTemplate, backend.NetworkdMatch()), 0444)
+		networkdTemplate, 0444)
 	if err != nil {
 		return -1, err
 	}
