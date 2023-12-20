@@ -105,9 +105,6 @@ type backend interface {
 	// A list of udev rules
 	UdevRules() []string
 
-	// The match expression used for the networkd configuration
-	NetworkdMatch() string
-
 	// The tty used for the job output
 	JobOutputTTY() string
 

@@ -100,10 +100,6 @@ func (b umlBackend) UdevRules() []string {
 	return udevRules
 }
 
-func (b umlBackend) NetworkdMatch() string {
-	return "vec*"
-}
-
 func (b umlBackend) JobOutputTTY() string {
 	// Send the fakemachine job output to the right console
 	if b.machine.showBoot {
