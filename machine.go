@@ -294,8 +294,18 @@ DHCP=ipv4
 LinkLocalAddressing=no
 IPv6AcceptRA=no
 `
+
+const networkdLinkTemplate = `
+[Match]
+Type=ether
+
+[Link]
+# Give the interface a static name
+Name=ethernet0
+`
+
 const commandWrapper = `#!/bin/sh
-/lib/systemd/systemd-networkd-wait-online -q
+/lib/systemd/systemd-networkd-wait-online -q --interface=ethernet0
 if [ $? != 0 ]; then
   echo "WARNING: Network setup failed"
   echo "== Journal =="
@@ -799,6 +809,12 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	err = w.WriteFile("/etc/systemd/network/ethernet.network",
 		fmt.Sprintf(networkdTemplate, backend.NetworkdMatch()), 0444)
+	if err != nil {
+		return -1, err
+	}
+
+	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
+		networkdLinkTemplate, 0444)
 	if err != nil {
 		return -1, err
 	}
