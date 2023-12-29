@@ -49,12 +49,14 @@ jobs:
         #
         # For Arch Linux uml is not yet supported, so only test under qemu there.
         os: [bullseye, bookworm, trixie]
-        backend: [qemu, uml]
+        backend: [qemu, uml, kvm]
         include:
           - os: arch
-            backend: qemu
+            backend: "qemu"
+          - os: arch
+            backend: "kvm"
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.backend == 'kvm' && 'kvm' || 'ubuntu-latest' }}
     defaults:
       run:
         shell: bash
@@ -64,6 +66,7 @@ jobs:
         --security-opt label=disable
         --cap-add=SYS_PTRACE
         --tmpfs /scratch:exec
+        ${{ matrix.backend == 'kvm' && '--device /dev/kvm' || '' }}
     env:
       TMP: /scratch
     steps:
