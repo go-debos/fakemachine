@@ -790,6 +790,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
+	w.WriteFile("/etc/shadow", "root:$y$j9T$XaJGXSfcT11b.6G3SjdHr1$JEaRdpLsBJaMsPC3uuis.JL/rLRcOmtTS0c684HbLP8:17294:0:99999:7:::\n", 0444)
+
 	err = w.CopyFile("/etc/group")
 	if err != nil {
 		return -1, err

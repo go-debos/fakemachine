@@ -176,11 +176,12 @@ func (b qemuBackend) JobOutputTTY() string {
 }
 
 func (b qemuBackend) MountParameters(mount mountPoint) (string, []string) {
-	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
+	//return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
+	return "virtiofs", []string{"defaults"}
 }
 
 func (b qemuBackend) InitModules() []string {
-	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p"}
+	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p", "virtiofs"}
 }
 
 func (b qemuBackend) InitStaticVolumes() []mountPoint {
@@ -208,7 +209,9 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		"-initrd", m.initrdpath,
 		"-display", "none",
 		"-nic", "user,model=virtio-net-pci",
-		"-no-reboot"}
+		"-no-reboot",
+		"-object", "memory-backend-memfd,id=mem,size=2G,share=on",
+		"-numa", "node,memdev=mem"}
 
 	if kvm {
 		qemuargs = append(qemuargs,
@@ -250,9 +253,32 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	}
 
 	for _, point := range m.mounts {
-		qemuargs = append(qemuargs, "-virtfs",
-			fmt.Sprintf("local,mount_tag=%s,path=%s,security_model=none,multidevs=remap",
-				point.label, point.hostDirectory))
+		virtiofsdargs := []string{
+		"/usr/libexec/virtiofsd",
+		//"--log-level", "trace",
+		"--sandbox", "none",
+		  "--socket-path",
+		 fmt.Sprintf("%s.sock", point.label),
+		 "--shared-dir",
+		 point.hostDirectory,
+		}
+		fmt.Printf("starting: %v\n", virtiofsdargs);
+		pa := os.ProcAttr{
+			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+		}
+		_, err := os.StartProcess("/usr/libexec/virtiofsd", virtiofsdargs, &pa)
+		if err != nil {
+			return false, err
+		}
+
+		qemuargs = append(qemuargs,
+			"-chardev",
+			fmt.Sprintf("socket,id=char-%s,path=%s.sock", 
+				point.label, point.label),
+			"-device",
+			fmt.Sprintf("vhost-user-fs-pci,chardev=char-%s,tag=%s",
+				point.label, point.label))
+				//point.label, point.hostDirectory))
 	}
 
 	for i, img := range m.images {
