@@ -48,7 +48,7 @@ jobs:
         # See https://github.com/actions/runner-images/issues/183
         #
         # For Arch Linux uml is not yet supported, so only test under qemu there.
-        os: [bullseye, bookworm, trixie]
+        os: [bookworm, trixie]
         backend: [qemu, uml, kvm]
         include:
           - os: arch
