@@ -238,6 +238,15 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 		m.AddVolume("/etc/ssl")
 	}
 
+	// Mounts for java VM configuration, especialy security policies
+	matches, _ := filepath.Glob("/etc/java*")
+	for _, path := range matches {
+		stat, err := os.Stat(path)
+		if err == nil && stat.IsDir() {
+			m.AddVolume(path)
+		}
+	}
+
 	// Dbus configuration
 	if _, err := os.Stat("/etc/dbus-1"); err == nil {
 		m.AddVolume("/etc/dbus-1")
