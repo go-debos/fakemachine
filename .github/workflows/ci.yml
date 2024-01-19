@@ -56,7 +56,7 @@ jobs:
           - os: arch
             backend: "kvm"
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
-    runs-on: ${{ matrix.backend == 'kvm' && 'kvm' || 'ubuntu-latest' }}
+    runs-on: 'ubuntu-latest'
     defaults:
       run:
         shell: bash
