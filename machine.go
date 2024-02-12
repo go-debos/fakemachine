@@ -99,11 +99,6 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 		return nil
 	}
 
-	prefix := ""
-	if mergedUsrSystem() {
-		prefix = "/usr"
-	}
-
 	found := false
 	for suffix, fn := range suffixes {
 		if strings.HasSuffix(modpath, suffix) {
@@ -115,8 +110,15 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 
 			// The suffix is the complete thing - ".ko.foobar"
 			// Reinstate the required ".ko" part, after trimming.
-			basepath := strings.TrimSuffix(modpath, suffix) + ".ko"
-			if err := w.TransformFileTo(modpath, prefix+basepath, fn); err != nil {
+			dest := strings.TrimSuffix(modpath, suffix) + ".ko"
+
+			// Ensure destination has /usr prefix if running
+			// on merged-usr system.
+			if mergedUsrSystem() && !strings.HasPrefix(dest, "/usr") {
+				dest = "/usr" + dest
+			}
+
+			if err := w.TransformFileTo(modpath, dest, fn); err != nil {
 				return err
 			}
 			found = true
