@@ -18,7 +18,7 @@ jobs:
     - uses: actions/setup-go@v5
     - uses: actions/checkout@v4
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v4
+      uses: golangci/golangci-lint-action@v5
 
   man-page:
     name: Check if man page has been regenerated
