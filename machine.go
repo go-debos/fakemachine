@@ -301,9 +301,6 @@ Type=ether
 
 [Network]
 DHCP=ipv4
-# Disable link-local address to speedup boot
-LinkLocalAddressing=no
-IPv6AcceptRA=no
 `
 
 const networkdLinkTemplate = `
