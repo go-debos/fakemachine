@@ -6,7 +6,6 @@ package fakemachine
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -71,7 +70,7 @@ func (b umlBackend) ModulePath() (string, error) {
 	}
 
 	// find the subdirectory containing the modules for the UML release
-	modSubdirs, err := ioutil.ReadDir(moddir)
+	modSubdirs, err := os.ReadDir(moddir)
 	if err != nil {
 		return "", err
 	}

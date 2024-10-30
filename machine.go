@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alessio/shellescape"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -609,7 +609,7 @@ func (m *Machine) setupscratch() error {
 		return nil
 	}
 
-	tmpfile, err := ioutil.TempFile(m.scratchpath, "fake-scratch.img.")
+	tmpfile, err := os.CreateTemp(m.scratchpath, "fake-scratch.img.")
 	if err != nil {
 		return err
 	}
@@ -659,7 +659,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		}
 	}
 
-	tmpdir, err := ioutil.TempDir("", "fakemachine-")
+	tmpdir, err := os.MkdirTemp("", "fakemachine-")
 	if err != nil {
 		return -1, err
 	}
@@ -902,7 +902,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, err
 	}
 
-	exitstr, _ := ioutil.ReadAll(result)
+	exitstr, _ := io.ReadAll(result)
 	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
 
 	if err != nil {
