@@ -8,8 +8,11 @@ import (
 	"github.com/go-debos/fakemachine"
 	"github.com/jessevdk/go-flags"
 	"os"
+	"runtime/debug"
 	"strings"
 )
+
+var Version string
 
 type Options struct {
 	Backend     string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
@@ -22,10 +25,46 @@ type Options struct {
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
+	Version     bool              `long:"version" description:"Print fakemachine version"`
 }
 
 var options Options
 var parser = flags.NewParser(&options, flags.Default)
+
+func GetDeterminedVersion(version string) string {
+	DeterminedVersion := "unknown"
+
+	// Use the injected Version from build system if any.
+	// Otherwise try to determine the best version string from debug info.
+	if len(version) > 0 {
+		DeterminedVersion = version
+	} else {
+		info, ok := debug.ReadBuildInfo()
+		if ok {
+			// Try vcs version first as it will only be set on a local build
+			var revision *string
+			var modified *string
+			for _, s := range info.Settings {
+				if s.Key == "vcs.revision" {
+					revision = &s.Value
+				}
+				if s.Key == "vcs.modified" {
+					modified = &s.Value
+				}
+			}
+			if revision != nil {
+				DeterminedVersion = *revision
+				if modified != nil && *modified == "true" {
+					DeterminedVersion += "-dirty"
+				}
+			} else {
+				DeterminedVersion = info.Main.Version
+			}
+		}
+	}
+
+	return DeterminedVersion
+}
 
 func warnLocalhost(variable string, value string) {
 	message := `WARNING: Environment variable %[1]s contains a reference to
@@ -149,6 +188,11 @@ func main() {
 			os.Exit(0)
 		}
 		os.Exit(1)
+	}
+
+	if options.Version {
+		fmt.Printf("fakemachine %v\n", GetDeterminedVersion(Version))
+		return
 	}
 
 	m, err := fakemachine.NewMachineWithBackend(options.Backend)
