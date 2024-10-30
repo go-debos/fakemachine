@@ -5,7 +5,6 @@ package fakemachine
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -85,7 +84,7 @@ func (b qemuBackend) KernelRelease() (string, error) {
 		return release, nil
 	}
 
-	files, err := ioutil.ReadDir("/lib/modules")
+	files, err := os.ReadDir("/lib/modules")
 	if err != nil {
 		return "", err
 	}
