@@ -39,7 +39,7 @@ func checkStreamsMatch(t *testing.T, output, check io.Reader) error {
 				i, ochar, cchar)
 			return errors.New("Data mismatch")
 		}
-		i += 1
+		i++
 	}
 }
 

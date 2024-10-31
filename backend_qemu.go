@@ -174,7 +174,7 @@ func (b qemuBackend) JobOutputTTY() string {
 	return "/dev/hvc0"
 }
 
-func (b qemuBackend) MountParameters(mount mountPoint) (string, []string) {
+func (b qemuBackend) MountParameters(_ mountPoint) (string, []string) {
 	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
 }
 

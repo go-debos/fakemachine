@@ -146,9 +146,8 @@ func main() {
 		var flagsErr *flags.Error
 		if errors.As(err, &flagsErr) && flagsErr.Type == flags.ErrHelp {
 			os.Exit(0)
-		} else {
-			os.Exit(1)
 		}
+		os.Exit(1)
 	}
 
 	m, err := fakemachine.NewMachineWithBackend(options.Backend)

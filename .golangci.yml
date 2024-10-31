@@ -3,6 +3,7 @@ linters:
     - errorlint
     - gofmt
     - misspell
+    - revive
     - stylecheck
     - unused
     - whitespace

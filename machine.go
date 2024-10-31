@@ -566,7 +566,7 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 			deps[j] = deppath
 		}
 		output[i] = fmt.Sprintf("%s: %s", modpath, strings.Join(deps, " "))
-		i += 1
+		i++
 	}
 
 	path := path.Join(moddir, "modules.dep")
