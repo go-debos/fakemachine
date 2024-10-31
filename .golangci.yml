@@ -1,9 +1,14 @@
 linters:
   enable:
+    - errcheck
     - errorlint
     - gofmt
+    - gosimple
+    - govet
+    - ineffassign
     - misspell
     - revive
+    - staticcheck
     - stylecheck
     - unused
     - whitespace
