@@ -2,5 +2,7 @@ linters:
   enable:
     - errorlint
     - gofmt
+    - misspell
     - stylecheck
+    - unused
     - whitespace

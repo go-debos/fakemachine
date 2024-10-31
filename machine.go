@@ -240,7 +240,7 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 		m.AddVolume("/etc/ssl")
 	}
 
-	// Mounts for java VM configuration, especialy security policies
+	// Mounts for java VM configuration, especially security policies
 	matches, _ := filepath.Glob("/etc/java*")
 	for _, path := range matches {
 		stat, err := os.Stat(path)
