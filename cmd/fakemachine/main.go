@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+const Version = "0.0.10"
+
 type Options struct {
 	Backend     string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
 	Volumes     []string          `short:"v" long:"volume" description:"volume to mount"`
@@ -21,6 +23,7 @@ type Options struct {
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
+	Version     bool              `long:"version" description:"Print fakemachine version"`
 }
 
 var options Options
@@ -149,6 +152,11 @@ func main() {
 		} else {
 			os.Exit(1)
 		}
+	}
+
+	if options.Version {
+		fmt.Printf("fakemachine v%s\n", Version)
+		return
 	}
 
 	m, err := fakemachine.NewMachineWithBackend(options.Backend)
