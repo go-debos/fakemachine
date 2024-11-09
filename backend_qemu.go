@@ -51,7 +51,7 @@ var qemuMachines = map[Arch]qemuMachine{
 		binary:  "qemu-system-aarch64",
 		console: "ttyAMA0",
 		machine: "virt",
-		/* The default cpu is a 32 bit one, which isn't very usefull
+		/* The default cpu is a 32 bit one, which isn't very useful
 		 * for 64 bit arm. There is no cpu setting for "minimal" 64
 		 * bit linux capable processor. The only generic setting
 		 * is "max", but that can be very slow to emulate. So pick
@@ -174,7 +174,7 @@ func (b qemuBackend) JobOutputTTY() string {
 	return "/dev/hvc0"
 }
 
-func (b qemuBackend) MountParameters(mount mountPoint) (string, []string) {
+func (b qemuBackend) MountParameters(_ mountPoint) (string, []string) {
 	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
 }
 
