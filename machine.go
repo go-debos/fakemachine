@@ -337,8 +337,8 @@ Description=fakemachine runner
 Conflicts=shutdown.target
 Before=shutdown.target
 Requires=basic.target
-Wants=systemd-resolved.service binfmt-support.service systemd-networkd.service
-After=basic.target systemd-resolved.service binfmt-support.service systemd-networkd.service
+Wants=systemd-resolved.service binfmt-support.service network-online.target
+After=basic.target systemd-resolved.service binfmt-support.service network-online.target
 OnFailure=poweroff.target
 
 [Service]
