@@ -185,16 +185,17 @@ type image struct {
 }
 
 type Machine struct {
-	arch     Arch
-	backend  backend
-	mounts   []mountPoint
-	count    int
-	images   []image
-	memory   int
-	numcpus  int
-	showBoot bool
-	quiet    bool
-	Environ  []string
+	arch       Arch
+	backend    backend
+	mounts     []mountPoint
+	count      int
+	images     []image
+	memory     int
+	numcpus    int
+	sectorSize int
+	showBoot   bool
+	quiet      bool
+	Environ    []string
 
 	scratchsize int64
 	scratchpath string
@@ -211,7 +212,7 @@ func NewMachine() (*Machine, error) {
 // Create a new machine object
 func NewMachineWithBackend(backendName string) (*Machine, error) {
 	var err error
-	m := &Machine{memory: 2048, numcpus: runtime.NumCPU()}
+	m := &Machine{memory: 2048, numcpus: runtime.NumCPU(), sectorSize: 512}
 
 	var ok bool
 	if m.arch, ok = archMap[runtime.GOARCH]; !ok {
@@ -494,6 +495,12 @@ func (m *Machine) SetMemory(memory int) {
 // the number of available cores in the system.
 func (m *Machine) SetNumCPUs(numcpus int) {
 	m.numcpus = numcpus
+}
+
+// SetSectorSize overrides the default sector size(512 bytes) for the image
+// exposed to the fakemachine
+func (m *Machine) SetSectorSize(sectorSize int) {
+	m.sectorSize = sectorSize
 }
 
 // SetShowBoot sets whether to show boot/console messages from the fakemachine.

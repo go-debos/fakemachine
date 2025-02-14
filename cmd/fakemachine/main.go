@@ -18,6 +18,7 @@ type Options struct {
 	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
 	Memory      int               `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
 	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
+	SectorSize  int               `short:"S" long:"sectorsize" description:"Override image sector size"`
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
@@ -177,6 +178,10 @@ func main() {
 
 	if options.CPUs > 0 {
 		m.SetNumCPUs(options.CPUs)
+	}
+
+	if options.SectorSize > 0 {
+		m.SetSectorSize(options.SectorSize)
 	}
 
 	command := "/bin/bash"
