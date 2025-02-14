@@ -258,8 +258,8 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		qemuargs = append(qemuargs, "-drive",
 			fmt.Sprintf("file=%s,if=none,format=raw,cache=unsafe,id=drive-virtio-disk%d", img.path, i))
 		qemuargs = append(qemuargs, "-device",
-			fmt.Sprintf("virtio-blk-pci,drive=drive-virtio-disk%d,id=virtio-disk%d,serial=%s",
-				i, i, img.label))
+			fmt.Sprintf("virtio-blk-pci,drive=drive-virtio-disk%d,id=virtio-disk%d,serial=%s,logical_block_size=%d,physical_block_size=%d",
+				i, i, img.label, m.sectorSize, m.sectorSize))
 	}
 
 	qemuargs = append(qemuargs, "-append", strings.Join(kernelargs, " "))
