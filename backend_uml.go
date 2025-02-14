@@ -45,6 +45,11 @@ func (b umlBackend) Supported() (bool, error) {
 	if _, err := b.SlirpHelperPath(); err != nil {
 		return false, fmt.Errorf("libslirp-helper not installed")
 	}
+
+	// only support 512 bytes sector size
+	if b.machine.sectorSize != 512 {
+		return false, fmt.Errorf("uml backend only supports 512 bytes sector size")
+	}
 	return true, nil
 }
 
