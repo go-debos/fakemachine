@@ -9,6 +9,8 @@ import (
 	"github.com/jessevdk/go-flags"
 	"os"
 	"strings"
+	"runtime/debug"
+
 )
 
 type Options struct {
@@ -137,6 +139,17 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 }
 
 func main() {
+	info, ok := debug.ReadBuildInfo();
+	fmt.Printf("ok: %v\n", ok);
+	fmt.Printf("info: %v\n", info);
+	fmt.Printf("mmain: %v\n", info.Main);
+	for _, d := range info.Deps {
+	fmt.Printf("dep: %v\n", d);
+}
+	for _, s := range info.Settings {
+	fmt.Printf("setting: %v\n", s);
+}
+
 	// append the list of available backends to the commandline argument parser
 	opt := parser.FindOptionByLongName("backend")
 	opt.Choices = fakemachine.BackendNames()
