@@ -1,4 +1,4 @@
-module github.com/go-debos/fakemachine
+module github.com/sjoerdsimons/fakemachine
 
 go 1.15
 
