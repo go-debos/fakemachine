@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/alessio/shellescape v1.4.2
 	github.com/docker/go-units v0.5.0
+	github.com/go-debos/fakemachine v0.0.10
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/klauspost/compress v1.17.9
 	github.com/stretchr/testify v1.9.0
