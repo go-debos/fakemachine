@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,6 +59,64 @@ func TestImage(t *testing.T) {
 
 	if exitcode != 0 {
 		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
+	}
+}
+
+func AssertDevSectorSize(t *testing.T, device string, sectorsize int) {
+	bstypes := []string{"physical", "logical"}
+	for _, bstype := range bstypes {
+		path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
+		f, err := os.Open(path)
+		require.Nil(t, err)
+		defer f.Close()
+
+		blkdev := bufio.NewReader(f)
+		line, err := blkdev.ReadString('\n')
+		require.Nil(t, err)
+
+		line = strings.TrimSuffix(line, "\n")
+		sz, err := strconv.Atoi(line)
+		require.Nil(t, err)
+
+		require.Equal(t, sectorsize, sz)
+	}
+}
+
+func AssertSectorSize(t *testing.T, sectorsize int) {
+	if !InMachine() {
+		t.Parallel()
+		m := CreateMachine(t)
+		m.SetSectorSize(sectorsize)
+		_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
+		require.Nil(t, err)
+		if sectorsize == 512 {
+			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage512SectorSize", backendName})
+			require.Equal(t, exitcode, 0)
+		} else if sectorsize == 4096 {
+			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage4kSectorSize", backendName})
+			require.Equal(t, exitcode, 0)
+		} else {
+			t.Fatalf("Unhandled sector size %d", sectorsize)
+		}
+	} else {
+		backend := flag.Args()
+		if backend[0] == "uml" {
+			AssertDevSectorSize(t, "ubda", sectorsize)
+		} else {
+			AssertDevSectorSize(t, "vda", sectorsize)
+		}
+	}
+}
+
+func TestImage512SectorSize(t *testing.T) {
+	AssertSectorSize(t, 512)
+}
+
+func TestImage4kSectorSize(t *testing.T) {
+	if backendName == "uml" {
+		t.Skip("Skipping test for 4k sector size on uml backend (Not Implemented)")
+	} else {
+		AssertSectorSize(t, 4096)
 	}
 }
 
