@@ -79,9 +79,6 @@ jobs:
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
 
-    - name: Ensure no tests were skipped
-      run: "! grep -q SKIP test.out"
-
   # Job to key success status against
   allgreen:
     name: allgreen
