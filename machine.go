@@ -3,11 +3,11 @@
 package fakemachine
 
 import (
+	"al.essio.dev/pkg/shellescape"
 	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/alessio/shellescape"
 	"io"
 	"os"
 	"os/exec"
