@@ -1,9 +1,9 @@
 package main
 
 import (
+	"al.essio.dev/pkg/shellescape"
 	"errors"
 	"fmt"
-	"github.com/alessio/shellescape"
 	"github.com/docker/go-units"
 	"github.com/go-debos/fakemachine"
 	"github.com/jessevdk/go-flags"
