@@ -74,7 +74,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Test build
-      run: go build -o fakemachine cmd/fakemachine/main.go
+      run: go build -o fakemachine -ldflags="-X main.Version=$(git describe --tags HEAD)" cmd/fakemachine/main.go
 
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
