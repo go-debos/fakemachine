@@ -73,6 +73,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Set safe directory in container
+      run: /usr/bin/git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
     - name: Define fakemachine version
       run: echo "FAKEMACHINE_VER=$(git describe --tags HEAD)" >> "$GITHUB_ENV"
 
