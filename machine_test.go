@@ -89,13 +89,14 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 		m.SetSectorSize(sectorsize)
 		_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
 		require.Nil(t, err)
-		if sectorsize == 512 {
+		switch sectorsize {
+		case 512:
 			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage512SectorSize", backendName})
 			require.Equal(t, exitcode, 0)
-		} else if sectorsize == 4096 {
+		case 4096:
 			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage4kSectorSize", backendName})
 			require.Equal(t, exitcode, 0)
-		} else {
+		default:
 			t.Fatalf("Unhandled sector size %d", sectorsize)
 		}
 	} else {
