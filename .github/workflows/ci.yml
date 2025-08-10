@@ -62,6 +62,10 @@ jobs:
             backend: "qemu"
           - os: trixie
             backend: "kvm"
+          - os: forky
+            backend: "qemu"
+          - os: forky
+            backend: "kvm"
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: 'ubuntu-latest'
     defaults:
