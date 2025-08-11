@@ -140,6 +140,10 @@ func (b umlBackend) InitStaticVolumes() []mountPoint {
 func (b umlBackend) Start() (bool, error) {
 	m := b.machine
 
+	if !m.quiet {
+		fmt.Printf("WARNING: uml backend is flaky and unsupported\n")
+	}
+
 	kernelPath, err := b.KernelPath()
 	if err != nil {
 		return false, err
