@@ -44,6 +44,11 @@ func newBackend(name string, m *Machine) (backend, error) {
 		for _, backend := range backends {
 			backendName := backend.Name()
 
+			/* The user-mode-linux backend is flaky, don't allow users to auto-select it */
+			if backendName == "uml" {
+				continue
+			}
+
 			/* The qemu backend is slow, don't allow users to auto-select it */
 			if backendName == "qemu" {
 				continue
