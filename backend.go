@@ -11,8 +11,8 @@ import (
 func implementedBackends(m *Machine) []backend {
 	return []backend{
 		newKvmBackend(m),
-		newUmlBackend(m),
 		newQemuBackend(m),
+		newUmlBackend(m),
 	}
 }
 
