@@ -49,11 +49,6 @@ func newBackend(name string, m *Machine) (backend, error) {
 				continue
 			}
 
-			/* The qemu backend is slow, don't allow users to auto-select it */
-			if backendName == "qemu" {
-				continue
-			}
-
 			b, backendErr := newBackend(backendName, m)
 			if backendErr != nil {
 				/* Append the error to any existing backend creation error(s).
