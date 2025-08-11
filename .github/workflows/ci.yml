@@ -50,12 +50,17 @@ jobs:
         # See https://github.com/actions/runner-images/issues/183
         #
         # For Arch Linux uml is not yet supported, so only test under qemu there.
-        os: [bookworm, trixie]
+        os: [bookworm]
         backend: [qemu, uml, kvm]
         include:
           - os: arch
             backend: "qemu"
           - os: arch
+            backend: "kvm"
+          # user-mode-linux is currently broken; see https://github.com/go-debos/fakemachine/issues/241
+          - os: trixie
+            backend: "qemu"
+          - os: trixie
             backend: "kvm"
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: 'ubuntu-latest'
