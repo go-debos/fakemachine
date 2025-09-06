@@ -29,3 +29,19 @@ Application Options:
 Help Options:
   -h, --help                        Show this help message
 ```
+
+# INSTALLATION
+
+```
+$ export GOPATH=~/go
+$ export PATH=$PATH:~/go/bin
+$ go install github.com/go-debos/fakemachine/cmd/fakemachine@latest
+```
+
+# USAGE
+
+```
+$ fakemachine echo test
+Running echo test using kvm backend
+test
+```
