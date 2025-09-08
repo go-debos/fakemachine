@@ -1,6 +1,6 @@
 module github.com/go-debos/fakemachine
 
-go 1.24
+go 1.24.0
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.0
@@ -10,7 +10,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/surma/gocpio v1.1.0
 	github.com/ulikunitz/xz v0.5.15
-	golang.org/x/sys v0.22.0
+	golang.org/x/sys v0.36.0
 )
 
 require (
