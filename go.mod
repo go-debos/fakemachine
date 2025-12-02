@@ -6,7 +6,7 @@ require (
 	al.essio.dev/pkg/shellescape v1.6.0
 	github.com/docker/go-units v0.5.0
 	github.com/jessevdk/go-flags v1.6.1
-	github.com/klauspost/compress v1.17.9
+	github.com/klauspost/compress v1.18.2
 	github.com/stretchr/testify v1.11.1
 	github.com/surma/gocpio v1.1.0
 	github.com/ulikunitz/xz v0.5.15
