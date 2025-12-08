@@ -40,3 +40,7 @@ $ fakemachine echo test
 Running echo test using kvm backend
 test
 ```
+
+## Contributing
+
+To contribute to fakemachine, see the dedicated [contributing documentation](CONTRIBUTING.md).
