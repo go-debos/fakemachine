@@ -65,3 +65,7 @@ $ docker run \
 Running echo test using kvm backend
 test
 ```
+
+## Contributing
+
+To contribute to fakemachine, see the dedicated [contributing documentation](https://github.com/go-debos/fakemachine/blob/main/CONTRIBUTING.md).
