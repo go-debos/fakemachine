@@ -1,4 +1,4 @@
-FROM debian:stretch-slim
+FROM debian:trixie-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -14,6 +14,7 @@ RUN apt-get update  && \
                                                busybox \
                                                linux-image-amd64 \
                                                systemd \
+                                               systemd-resolved \
                                                dbus
 
 # Bits needed to build fakemachine
