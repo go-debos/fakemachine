@@ -45,3 +45,28 @@ $ fakemachine echo test
 Running echo test using kvm backend
 test
 ```
+
+# DOCKER CONTAINER
+
+fakemachine is also available as a container image on [ghcr.io](https://github.com/go-debos/debos/pkgs/container/fakemachine).
+
+To run it:
+
+```
+$ docker pull ghcr.io/go-debos/fakemachine:main
+
+$ docker run \
+  --rm \
+  --interactive \
+  --tty \
+  --device /dev/kvm \
+  --user $(id -u) \
+  --workdir /work \
+  --mount "type=bind,source=$(pwd),destination=/work" \
+  --security-opt label=disable \
+  ghcr.io/go-debos/fakemachine:main \
+  echo test
+
+Running echo test using kvm backend
+test
+```
