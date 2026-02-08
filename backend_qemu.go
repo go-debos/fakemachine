@@ -66,7 +66,11 @@ func (b qemuBackend) QemuPath() (string, error) {
 		return "", fmt.Errorf("unsupported arch for qemu: %s", b.machine.arch)
 	}
 
-	return exec.LookPath(machine.binary)
+	path, err := exec.LookPath(machine.binary)
+	if err != nil {
+		return "", fmt.Errorf("failed to find qemu binary %s: %w", machine.binary, err)
+	}
+	return path, nil
 }
 
 func (b qemuBackend) KernelRelease() (string, error) {
@@ -76,7 +80,7 @@ func (b qemuBackend) KernelRelease() (string, error) {
 	 * environments */
 	var u unix.Utsname
 	if err := unix.Uname(&u); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get kernel release: %w", err)
 	}
 	release := string(u.Release[:bytes.IndexByte(u.Release[:], 0)])
 
@@ -86,7 +90,7 @@ func (b qemuBackend) KernelRelease() (string, error) {
 
 	files, err := os.ReadDir("/lib/modules")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read /lib/modules: %w", err)
 	}
 
 	for i := len(files) - 1; i >= 0; i-- {
@@ -123,7 +127,7 @@ func (b qemuBackend) KernelPath() (string, error) {
 
 	kernelPath := "/boot/vmlinuz-" + kernelRelease
 	if _, err := os.Stat(kernelPath); err != nil {
-		return "", err
+		return "", fmt.Errorf("kernel not found at %s: %w", kernelPath, err)
 	}
 
 	return kernelPath, nil
@@ -142,7 +146,7 @@ func (b qemuBackend) ModulePath() (string, error) {
 
 	moddir = path.Join(moddir, kernelRelease)
 	if _, err := os.Stat(moddir); err != nil {
-		return "", err
+		return "", fmt.Errorf("module directory not found at %s: %w", moddir, err)
 	}
 
 	return moddir, nil
@@ -275,13 +279,13 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 
 	p, err := os.StartProcess(qemubin, qemuargs, &pa)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to start qemu process: %w", err)
 	}
 
 	// wait for kvm process to exit
 	pstate, err := p.Wait()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error waiting for qemu process: %w", err)
 	}
 
 	return pstate.Success(), nil
@@ -302,7 +306,7 @@ func (b kvmBackend) Name() string {
 func (b kvmBackend) Supported() (bool, error) {
 	kvmDevice, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to open /dev/kvm: %w", err)
 	}
 	kvmDevice.Close()
 
