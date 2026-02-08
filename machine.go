@@ -102,10 +102,8 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 	found := false
 	for suffix, fn := range suffixes {
 		if strings.HasSuffix(modpath, suffix) {
-			// File must exist as-is on the filesystem. Aka do not
-			// fallback to other suffixes.
 			if _, err := os.Stat(modpath); err != nil {
-				return err
+				return fmt.Errorf("failed to stat module file %s: %w", modpath, err)
 			}
 
 			// The suffix is the complete thing - ".ko.foobar"
@@ -119,7 +117,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 			}
 
 			if err := w.TransformFileTo(modpath, dest, fn); err != nil {
-				return err
+				return fmt.Errorf("failed to transform module file %s: %w", modpath, err)
 			}
 			found = true
 			break
@@ -147,10 +145,10 @@ func realDir(path string) (string, error) {
 	var p string
 	var err error
 	if p, err = filepath.Abs(path); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get absolute path for %s: %w", path, err)
 	}
 	if p, err = filepath.EvalSymlinks(p); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to evaluate symlinks for %s: %w", p, err)
 	}
 	return filepath.Dir(p), nil
 }
@@ -403,7 +401,7 @@ func executeInitScriptTemplate(m *Machine, b backend) ([]byte, error) {
 	tmpl := template.Must(template.New("init").Funcs(helperFuncs).Parse(initScript))
 	out := &bytes.Buffer{}
 	if err := tmpl.Execute(out, tmplVariables); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute init script template: %w", err)
 	}
 	return out.Bytes(), nil
 }
@@ -445,7 +443,7 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 	if size < 0 {
 		_, err := os.Stat(path)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to stat image file %s: %w", path, err)
 		}
 	}
 
@@ -461,13 +459,14 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 
 	i, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create image file %s: %w", path, err)
 	}
 
 	if size >= 0 {
 		err = i.Truncate(size)
 		if err != nil {
-			return "", err
+			i.Close()
+			return "", fmt.Errorf("failed to truncate image file: %w", err)
 		}
 	}
 
@@ -546,7 +545,10 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 	fstab = append(fstab, "")
 
 	err := w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to write fstab: %w", err)
+	}
+	return nil
 }
 
 func stripCompressionSuffix(module string) (string, error) {
@@ -577,7 +579,11 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	}
 
 	path := path.Join(moddir, "modules.dep")
-	return w.WriteFile(path, strings.Join(output, "\n"), 0644)
+	err := w.WriteFile(path, strings.Join(output, "\n"), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write modules.dep: %w", err)
+	}
+	return nil
 }
 
 func (m *Machine) SetEnviron(environ []string) {
@@ -596,7 +602,7 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 
 	for _, v := range modfiles {
 		if err := w.CopyFile(moddir + "/" + v); err != nil {
-			return err
+			return fmt.Errorf("failed to copy kernel module file %s: %w", moddir+"/"+v, err)
 		}
 	}
 
@@ -618,7 +624,7 @@ func (m *Machine) setupscratch() error {
 
 	tmpfile, err := os.CreateTemp(m.scratchpath, "fake-scratch.img.")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temp file for scratch: %w", err)
 	}
 	m.scratchfile = tmpfile.Name()
 
@@ -628,8 +634,11 @@ func (m *Machine) setupscratch() error {
 	}
 	mkfs := exec.Command("mkfs.ext4", "-q", tmpfile.Name())
 	err = mkfs.Run()
+	if err != nil {
+		return fmt.Errorf("failed to format scratch disk: %w", err)
+	}
 
-	return err
+	return nil
 }
 
 func (m *Machine) cleanup() {
@@ -668,7 +677,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	tmpdir, err := os.MkdirTemp("", "fakemachine-")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer os.RemoveAll(tmpdir)
@@ -682,14 +691,14 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to create initrd file: %w", err)
 	}
 
 	backend := m.backend
 
 	kernelModuleDir, err := backend.ModulePath()
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to get kernel module directory: %w", err)
 	}
 
 	w := writerhelper.NewWriterHelper(f)
@@ -707,12 +716,12 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		{Directory: "/lib64", Perm: 0755},
 	})
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write directories: %w", err)
 	}
 
 	err = w.WriteSymlink("/run", "/var/run", 0755)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write /var/run symlink: %w", err)
 	}
 
 	if mergedUsrSystem() {
@@ -723,7 +732,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 			{Target: "/usr/lib64", Link: "/lib64", Perm: 0755},
 		})
 		if err != nil {
-			return -1, err
+			return -1, fmt.Errorf("failed to write merged-usr symlinks: %w", err)
 		}
 	} else {
 		err = w.WriteDirectories([]writerhelper.WriteDirectory{
@@ -732,7 +741,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 			{Directory: "/lib", Perm: 0755},
 		})
 		if err != nil {
-			return -1, err
+			return -1, fmt.Errorf("failed to write non-merged-usr directories: %w", err)
 		}
 	}
 
@@ -744,22 +753,22 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	// search for busybox; in some distros it's located under /sbin
 	busybox, err := exec.LookPath("busybox")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to find busybox: %w", err)
 	}
 	err = w.CopyFileTo(busybox, prefix+"/bin/busybox")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy busybox: %w", err)
 	}
 
 	/* Ensure systemd-resolved is available */
 	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
-		return -1, err
+		return -1, fmt.Errorf("systemd-resolved not found: %w", err)
 	}
 
 	dynamicLinker := archDynamicLinker[m.arch]
 	err = w.CopyFile(prefix + dynamicLinker)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy dynamic linker: %w", err)
 	}
 
 	/* C libraries */
@@ -769,72 +778,72 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 	err = w.CopyFile(libraryDir + "/libc.so.6")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy libc.so.6: %w", err)
 	}
 	err = w.CopyFile(libraryDir + "/libresolv.so.2")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy libresolv.so.2: %w", err)
 	}
 
 	err = w.WriteCharDevice("/dev/console", 5, 1, 0700)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write /dev/console device: %w", err)
 	}
 
 	// Linker configuration
 	err = w.CopyFile("/etc/ld.so.conf")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy ld.so.conf: %w", err)
 	}
 
 	err = w.CopyTree("/etc/ld.so.conf.d")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy ld.so.conf.d: %w", err)
 	}
 
 	// Core system configuration
 	err = w.WriteFile("/etc/machine-id", "", 0444)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write machine-id: %w", err)
 	}
 
 	err = w.WriteFile("/etc/hostname", "fakemachine", 0444)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write hostname: %w", err)
 	}
 
 	err = w.CopyFile("/etc/passwd")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy passwd: %w", err)
 	}
 
 	err = w.CopyFile("/etc/group")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy group: %w", err)
 	}
 
 	err = w.CopyFile("/etc/nsswitch.conf")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to copy nsswitch.conf: %w", err)
 	}
 
 	// udev rules
 	udevRules := strings.Join(backend.UdevRules(), "\n") + "\n"
 	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write udev rules: %w", err)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/ethernet.network",
 		networkdTemplate, 0444)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write ethernet.network: %w", err)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
 		networkdLinkTemplate, 0444)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write ethernet.link: %w", err)
 	}
 
 	err = w.WriteSymlink(
@@ -842,18 +851,18 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"/etc/resolv.conf",
 		0755)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write resolv.conf symlink: %w", err)
 	}
 
 	err = m.writerKernelModules(w, kernelModuleDir, backend.InitModules())
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write kernel modules: %w", err)
 	}
 
 	err = w.WriteFile("etc/systemd/system/fakemachine.service",
 		fmt.Sprintf(serviceTemplate, backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write fakemachine.service: %w", err)
 	}
 
 	err = w.WriteSymlink(
@@ -861,13 +870,13 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		"/dev/null",
 		0755)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write serial-getty symlink: %w", err)
 	}
 
 	err = w.WriteFile("/wrapper",
 		fmt.Sprintf(commandWrapper, command), 0755)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write wrapper script: %w", err)
 	}
 
 	init, err := executeInitScriptTemplate(m, backend)
@@ -877,18 +886,18 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	err = w.WriteFileRaw("/init", init, 0755)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to write init script: %w", err)
 	}
 
 	err = m.generateFstab(w, backend)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to generate fstab: %w", err)
 	}
 
 	for _, v := range extracontent {
 		err = w.CopyFileTo(v[0], v[1])
 		if err != nil {
-			return -1, err
+			return -1, fmt.Errorf("failed to copy extra content %s: %w", v[0], err)
 		}
 	}
 
@@ -906,14 +915,14 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 
 	result, err := os.Open(path.Join(tmpdir, "result"))
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to open result file: %w", err)
 	}
 
 	exitstr, _ := io.ReadAll(result)
 	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
 
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to parse exit code: %w", err)
 	}
 
 	return exitcode, nil
