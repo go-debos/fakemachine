@@ -86,7 +86,7 @@ func (w *WriterHelper) WriteDirectory(directory string, perm os.FileMode) error 
 
 	err = w.WriteHeader(hdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write directory header: %w", err)
 	}
 
 	w.paths[directory] = true
@@ -112,10 +112,13 @@ func (w *WriterHelper) WriteFileRaw(file string, bytes []byte, perm os.FileMode)
 
 	err = w.WriteHeader(hdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write file header: %w", err)
 	}
 	_, err = w.Write(bytes)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to write file content: %w", err)
+	}
+	return nil
 }
 
 func (w *WriterHelper) WriteSymlinks(links []WriteSymlink) error {
@@ -145,11 +148,14 @@ func (w *WriterHelper) WriteSymlink(target, link string, perm os.FileMode) error
 
 	err = w.WriteHeader(hdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write symlink header: %w", err)
 	}
 
 	_, err = w.Write(content)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to write symlink content: %w", err)
+	}
+	return nil
 }
 
 func (w *WriterHelper) WriteCharDevice(device string, major, minor int64, perm os.FileMode) error {
@@ -167,7 +173,7 @@ func (w *WriterHelper) WriteCharDevice(device string, major, minor int64, perm o
 
 	err = w.WriteHeader(hdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write character device header: %w", err)
 	}
 	return nil
 }
@@ -186,7 +192,11 @@ func (w *WriterHelper) CopyTree(path string) error {
 		return err
 	}
 
-	return filepath.Walk(path, walker)
+	err := filepath.Walk(path, walker)
+	if err != nil {
+		return fmt.Errorf("failed to walk directory %s: %w", path, err)
+	}
+	return nil
 }
 
 func (w *WriterHelper) CopyFileTo(src, dst string) error {
@@ -203,7 +213,7 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 
 	info, err := f.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source file %s: %w", src, err)
 	}
 
 	hdr := new(cpio.Header)
@@ -215,12 +225,12 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 
 	err = w.WriteHeader(hdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write file header for %s: %w", dst, err)
 	}
 
 	_, err = io.Copy(w, f)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to copy file content: %w", err)
 	}
 
 	return nil
@@ -234,13 +244,13 @@ func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) error {
 
 	f, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open source file %s: %w", src, err)
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source file %s: %w", src, err)
 	}
 
 	out := new(bytes.Buffer)
@@ -257,12 +267,12 @@ func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) error {
 
 	err = w.WriteHeader(hdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write header for transformed file %s: %w", dst, err)
 	}
 
 	_, err = io.Copy(w, out)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to copy transformed content: %w", err)
 	}
 
 	return nil

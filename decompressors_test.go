@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -24,12 +25,12 @@ func checkStreamsMatch(t *testing.T, output, check io.Reader) error {
 				return nil
 			}
 			if oerr != nil && oerr != io.EOF {
-				t.Errorf("Error reading output stream: %s", oerr)
-				return oerr
+				t.Errorf("Error reading output stream: %v", oerr)
+				return fmt.Errorf("error reading output stream: %w", oerr)
 			}
 			if cerr != nil && cerr != io.EOF {
-				t.Errorf("Error reading check stream: %s", cerr)
-				return cerr
+				t.Errorf("Error reading check stream: %v", cerr)
+				return fmt.Errorf("error reading check stream: %w", cerr)
 			}
 			return nil
 		}
