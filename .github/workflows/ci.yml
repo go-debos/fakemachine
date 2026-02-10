@@ -95,6 +95,9 @@ jobs:
   build-container:
     name: Build Docker container
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     needs:
       - golangci
       - test
