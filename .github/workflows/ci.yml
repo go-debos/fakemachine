@@ -54,8 +54,13 @@ jobs:
         #
         # For Arch Linux uml is not yet supported, so only test under qemu there.
         # user-mode-linux is currently broken; see https://github.com/go-debos/fakemachine/issues/241
-        os: [arch, trixie, forky]
-        backend: [qemu, kvm]
+        os:
+          - arch
+          - debian-trixie
+          - debian-forky
+        backend:
+          - qemu
+          - kvm
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: 'ubuntu-latest'
     defaults:
