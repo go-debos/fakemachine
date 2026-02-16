@@ -58,6 +58,8 @@ jobs:
           - arch
           - debian-trixie
           - debian-forky
+          - ubuntu-questing
+          - fedora-latest
         backend:
           - qemu
           - kvm
