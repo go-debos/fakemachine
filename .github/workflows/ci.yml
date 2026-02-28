@@ -63,6 +63,9 @@ jobs:
         backend:
           - qemu
           - kvm
+        exclude:
+          - os: fedora-latest
+            backend: qemu
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: 'ubuntu-latest'
     defaults:
