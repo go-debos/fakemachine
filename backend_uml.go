@@ -77,7 +77,7 @@ func (b umlBackend) ModulePath() (string, error) {
 	// find the subdirectory containing the modules for the UML release
 	modSubdirs, err := os.ReadDir(moddir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read module directory %s: %w", moddir, err)
 	}
 	if len(modSubdirs) != 1 {
 		return "", fmt.Errorf("could not determine which user-mode-linux modules to use")
@@ -88,7 +88,11 @@ func (b umlBackend) ModulePath() (string, error) {
 }
 
 func (b umlBackend) SlirpHelperPath() (string, error) {
-	return exec.LookPath("libslirp-helper")
+	path, err := exec.LookPath("libslirp-helper")
+	if err != nil {
+		return "", fmt.Errorf("failed to find libslirp-helper: %w", err)
+	}
+	return path, nil
 }
 
 func (b umlBackend) UdevRules() []string {
@@ -165,7 +169,7 @@ func (b umlBackend) Start() (bool, error) {
 	 */
 	netSocketpair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM, 0)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to create socketpair: %w", err)
 	}
 
 	// one of the sockets will be attached to the slirp-helper
@@ -199,7 +203,7 @@ func (b umlBackend) Start() (bool, error) {
 
 	slirpHelper, err := os.StartProcess(slirpHelperPath, slirpHelperArgs, slirpHelperAttr)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to start libslirp-helper: %w", err)
 	}
 	defer func() { _ = slirpHelper.Kill() }()
 
@@ -249,13 +253,13 @@ func (b umlBackend) Start() (bool, error) {
 
 	p, err := os.StartProcess(kernelPath, umlargs, umlAttr)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to start uml process: %w", err)
 	}
 
 	// wait for uml process to exit
 	ustate, err := p.Wait()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error waiting for uml process: %w", err)
 	}
 
 	return ustate.Success(), nil
