@@ -296,6 +296,16 @@ func TestDiskSuffix(t *testing.T) {
 	}
 }
 
+func TestImageLabelUniqueness(t *testing.T) {
+	m := CreateMachine(t)
+
+	_, err := m.CreateImageWithLabel("test.img", 1024*1024, "my-disk")
+	require.NoError(t, err)
+
+	_, err = m.CreateImageWithLabel("test2.img", 1024*1024, "my-disk")
+	require.Error(t, err)
+}
+
 func TestCommandEscaping(t *testing.T) {
 	t.Parallel()
 	if InMachine() {
