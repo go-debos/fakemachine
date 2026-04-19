@@ -99,7 +99,7 @@ func (b umlBackend) UdevRules() []string {
 		suffix := diskSuffix(i)
 		udevRules = append(udevRules,
 			fmt.Sprintf(`KERNEL=="ubd%s", SYMLINK+="disk/by-fakemachine-label/%s"`, suffix, img.label),
-			fmt.Sprintf(`KERNEL=="ubd%s[0-9]", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
+			fmt.Sprintf(`KERNEL=="ubd%s[0-9]*", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
 	}
 	return udevRules
 }
