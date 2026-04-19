@@ -92,7 +92,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 	release, _ := m.backend.KernelRelease()
 	modpath := getModPath(modname, release)
 	if modpath == "" {
-		return errors.New("modules path couldn't be determined")
+		return fmt.Errorf("kernel module '%s' not found for kernel release '%s'", modname, release)
 	}
 
 	if modpath == "(builtin)" || copiedModules[modname] {
@@ -126,7 +126,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 		}
 	}
 	if !found {
-		return errors.New("module extension/suffix unknown")
+		return errors.New("kernel module extension/suffix unknown")
 	}
 
 	copiedModules[modname] = true
