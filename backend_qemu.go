@@ -156,7 +156,7 @@ func (b qemuBackend) UdevRules() []string {
 		suffix := diskSuffix(i)
 		udevRules = append(udevRules,
 			fmt.Sprintf(`KERNEL=="vd%s", SYMLINK+="disk/by-fakemachine-label/%s"`, suffix, img.label),
-			fmt.Sprintf(`KERNEL=="vd%s[0-9]", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
+			fmt.Sprintf(`KERNEL=="vd%s[0-9]*", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
 	}
 	return udevRules
 }
