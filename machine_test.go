@@ -280,6 +280,22 @@ func TestVolumes(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDiskSuffix(t *testing.T) {
+	cases := []struct {
+		i    int
+		want string
+	}{
+		{0, "a"}, {1, "b"}, {25, "z"},
+		{26, "aa"}, {27, "ab"}, {51, "az"},
+		{52, "ba"}, {701, "zz"}, {702, "aaa"},
+	}
+	for _, c := range cases {
+		if got := diskSuffix(c.i); got != c.want {
+			t.Errorf("diskSuffix(%d) = %q, want %q", c.i, got, c.want)
+		}
+	}
+}
+
 func TestCommandEscaping(t *testing.T) {
 	t.Parallel()
 	if InMachine() {
