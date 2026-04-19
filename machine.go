@@ -485,6 +485,16 @@ func (m *Machine) CreateImage(imagepath string, size int64) (string, error) {
 	return m.CreateImageWithLabel(imagepath, size, label)
 }
 
+// diskSuffix returns the disk name suffix for the i-th disk (0-indexed),
+// following Linux device naming: a, b, ..., z, aa, ab, ..., az, ba, ...
+func diskSuffix(i int) string {
+	suffix := ""
+	for ; i >= 0; i = (i/26 - 1) {
+		suffix = string(rune('a'+i%26)) + suffix
+	}
+	return suffix
+}
+
 // SetMemory sets the fakemachines amount of memory (in megabytes). Defaults to
 // 2048 MB
 func (m *Machine) SetMemory(memory int) {

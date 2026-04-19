@@ -96,10 +96,10 @@ func (b umlBackend) UdevRules() []string {
 
 	// create symlink under /dev/disk/by-fakemachine-label/ for each virtual image
 	for i, img := range b.machine.images {
-		driveLetter := 'a' + i
+		suffix := diskSuffix(i)
 		udevRules = append(udevRules,
-			fmt.Sprintf(`KERNEL=="ubd%c", SYMLINK+="disk/by-fakemachine-label/%s"`, driveLetter, img.label),
-			fmt.Sprintf(`KERNEL=="ubd%c[0-9]", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, driveLetter, img.label))
+			fmt.Sprintf(`KERNEL=="ubd%s", SYMLINK+="disk/by-fakemachine-label/%s"`, suffix, img.label),
+			fmt.Sprintf(`KERNEL=="ubd%s[0-9]", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
 	}
 	return udevRules
 }
