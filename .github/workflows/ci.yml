@@ -51,9 +51,6 @@ jobs:
         # functionality without hardware acceleration since the majority of code
         # is shared between the qemu and kvm backends.
         # See https://github.com/actions/runner-images/issues/183
-        #
-        # For Arch Linux uml is not yet supported, so only test under qemu there.
-        # user-mode-linux is currently broken; see https://github.com/go-debos/fakemachine/issues/241
         os:
           - arch
           - debian-trixie

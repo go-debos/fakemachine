@@ -100,12 +100,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 			t.Fatalf("Unhandled sector size %d", sectorsize)
 		}
 	} else {
-		backend := flag.Args()
-		if backend[0] == "uml" {
-			AssertDevSectorSize(t, "ubda", sectorsize)
-		} else {
-			AssertDevSectorSize(t, "vda", sectorsize)
-		}
+		AssertDevSectorSize(t, "vda", sectorsize)
 	}
 }
 
@@ -114,11 +109,7 @@ func TestImage512SectorSize(t *testing.T) {
 }
 
 func TestImage4kSectorSize(t *testing.T) {
-	if backendName == "uml" {
-		t.Skip("Skipping test for 4k sector size on uml backend (Not Implemented)")
-	} else {
-		AssertSectorSize(t, 4096)
-	}
+	AssertSectorSize(t, 4096)
 }
 
 func AssertMount(t *testing.T, mountpoint, fstype string) {
