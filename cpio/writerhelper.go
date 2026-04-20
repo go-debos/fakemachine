@@ -179,8 +179,10 @@ func (w *WriterHelper) WriteCharDevice(device string, major, minor int64, perm o
 }
 
 func (w *WriterHelper) CopyTree(path string) error {
-	walker := func(p string, info os.FileInfo, _ error) error {
-		var err error
+	walker := func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("error visiting %s: %w", p, err)
+		}
 		if info.Mode().IsDir() {
 			err = w.WriteDirectory(p, info.Mode() & ^os.ModeType)
 		} else if info.Mode().IsRegular() {
