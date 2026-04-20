@@ -660,6 +660,230 @@ func (m *Machine) cleanup() {
 	m.scratchfile = ""
 }
 
+func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr error) {
+	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create initrd file: %w", err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = fmt.Errorf("failed to close initrd file: %w", cerr)
+		}
+	}()
+
+	kernelModuleDir, err := m.backend.ModulePath()
+	if err != nil {
+		return fmt.Errorf("failed to get kernel module directory: %w", err)
+	}
+
+	w := writerhelper.NewWriterHelper(f)
+	defer func() {
+		if cerr := w.Close(); cerr != nil && retErr == nil {
+			retErr = fmt.Errorf("failed to close cpio writer: %w", cerr)
+		}
+	}()
+
+	err = w.WriteDirectories([]writerhelper.WriteDirectory{
+		{Directory: "/scratch", Perm: 01777},
+		{Directory: "/var/tmp", Perm: 01777},
+		{Directory: "/var/lib/dbus", Perm: 0755},
+		{Directory: "/tmp", Perm: 01777},
+		{Directory: "/sys", Perm: 0755},
+		{Directory: "/proc", Perm: 0755},
+		{Directory: "/run", Perm: 0755},
+		{Directory: "/usr", Perm: 0755},
+		{Directory: "/usr/bin", Perm: 0755},
+		{Directory: "/lib64", Perm: 0755},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to write directories: %w", err)
+	}
+
+	err = w.WriteSymlink("/run", "/var/run", 0755)
+	if err != nil {
+		return fmt.Errorf("failed to write /var/run symlink: %w", err)
+	}
+
+	if mergedUsrSystem() {
+		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
+			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
+			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
+			{Target: "/usr/lib", Link: "/lib", Perm: 0755},
+			{Target: "/usr/lib64", Link: "/lib64", Perm: 0755},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to write merged-usr symlinks: %w", err)
+		}
+	} else {
+		err = w.WriteDirectories([]writerhelper.WriteDirectory{
+			{Directory: "/sbin", Perm: 0744},
+			{Directory: "/bin", Perm: 0755},
+			{Directory: "/lib", Perm: 0755},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to write non-merged-usr directories: %w", err)
+		}
+	}
+
+	prefix := ""
+	if mergedUsrSystem() {
+		prefix = "/usr"
+	}
+
+	// search for busybox; in some distros it's located under /sbin
+	busybox, err := exec.LookPath("busybox")
+	if err != nil {
+		return fmt.Errorf("failed to find busybox: %w", err)
+	}
+	err = w.CopyFileTo(busybox, prefix+"/bin/busybox")
+	if err != nil {
+		return fmt.Errorf("failed to copy busybox: %w", err)
+	}
+
+	/* Ensure systemd-resolved is available */
+	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
+		return fmt.Errorf("systemd-resolved not found: %w", err)
+	}
+
+	dynamicLinker := archDynamicLinker[m.arch]
+	err = w.CopyFile(prefix + dynamicLinker)
+	if err != nil {
+		return fmt.Errorf("failed to copy dynamic linker: %w", err)
+	}
+
+	/* C libraries */
+	libraryDir, err := realDir(dynamicLinker)
+	if err != nil {
+		return err
+	}
+	err = w.CopyFile(libraryDir + "/libc.so.6")
+	if err != nil {
+		return fmt.Errorf("failed to copy libc.so.6: %w", err)
+	}
+	err = w.CopyFile(libraryDir + "/libresolv.so.2")
+	if err != nil {
+		return fmt.Errorf("failed to copy libresolv.so.2: %w", err)
+	}
+
+	err = w.WriteCharDevice("/dev/console", 5, 1, 0700)
+	if err != nil {
+		return fmt.Errorf("failed to write /dev/console device: %w", err)
+	}
+
+	// Linker configuration
+	err = w.CopyFile("/etc/ld.so.conf")
+	if err != nil {
+		return fmt.Errorf("failed to copy ld.so.conf: %w", err)
+	}
+
+	err = w.CopyTree("/etc/ld.so.conf.d")
+	if err != nil {
+		return fmt.Errorf("failed to copy ld.so.conf.d: %w", err)
+	}
+
+	// Core system configuration
+	err = w.WriteFile("/etc/machine-id", "", 0444)
+	if err != nil {
+		return fmt.Errorf("failed to write machine-id: %w", err)
+	}
+
+	err = w.WriteFile("/etc/hostname", "fakemachine", 0444)
+	if err != nil {
+		return fmt.Errorf("failed to write hostname: %w", err)
+	}
+
+	err = w.CopyFile("/etc/passwd")
+	if err != nil {
+		return fmt.Errorf("failed to copy passwd: %w", err)
+	}
+
+	err = w.CopyFile("/etc/group")
+	if err != nil {
+		return fmt.Errorf("failed to copy group: %w", err)
+	}
+
+	err = w.CopyFile("/etc/nsswitch.conf")
+	if err != nil {
+		return fmt.Errorf("failed to copy nsswitch.conf: %w", err)
+	}
+
+	// udev rules
+	udevRules := strings.Join(m.backend.UdevRules(), "\n") + "\n"
+	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
+	if err != nil {
+		return fmt.Errorf("failed to write udev rules: %w", err)
+	}
+
+	err = w.WriteFile("/etc/systemd/network/ethernet.network",
+		networkdTemplate, 0444)
+	if err != nil {
+		return fmt.Errorf("failed to write ethernet.network: %w", err)
+	}
+
+	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
+		networkdLinkTemplate, 0444)
+	if err != nil {
+		return fmt.Errorf("failed to write ethernet.link: %w", err)
+	}
+
+	err = w.WriteSymlink(
+		"/lib/systemd/resolv.conf",
+		"/etc/resolv.conf",
+		0755)
+	if err != nil {
+		return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
+	}
+
+	err = m.writerKernelModules(w, kernelModuleDir, m.backend.InitModules())
+	if err != nil {
+		return fmt.Errorf("failed to write kernel modules: %w", err)
+	}
+
+	err = w.WriteFile("etc/systemd/system/fakemachine.service",
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write fakemachine.service: %w", err)
+	}
+
+	err = w.WriteSymlink(
+		"/lib/systemd/system/serial-getty@ttyS0.service",
+		"/dev/null",
+		0755)
+	if err != nil {
+		return fmt.Errorf("failed to write serial-getty symlink: %w", err)
+	}
+
+	err = w.WriteFile("/wrapper",
+		fmt.Sprintf(commandWrapper, command), 0755)
+	if err != nil {
+		return fmt.Errorf("failed to write wrapper script: %w", err)
+	}
+
+	init, err := executeInitScriptTemplate(m, m.backend)
+	if err != nil {
+		return err
+	}
+
+	err = w.WriteFileRaw("/init", init, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to write init script: %w", err)
+	}
+
+	err = m.generateFstab(w, m.backend)
+	if err != nil {
+		return fmt.Errorf("failed to generate fstab: %w", err)
+	}
+
+	for _, v := range extracontent {
+		err = w.CopyFileTo(v[0], v[1])
+		if err != nil {
+			return fmt.Errorf("failed to copy extra content %s: %w", v[0], err)
+		}
+	}
+
+	return nil
+}
+
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples
 func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
@@ -699,229 +923,17 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	m.initrdpath = path.Join(tmpdir, "initramfs.cpio")
-	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-
-	if err != nil {
-		return -1, fmt.Errorf("failed to create initrd file: %w", err)
-	}
-
-	backend := m.backend
-
-	kernelModuleDir, err := backend.ModulePath()
-	if err != nil {
-		return -1, fmt.Errorf("failed to get kernel module directory: %w", err)
-	}
-
-	w := writerhelper.NewWriterHelper(f)
-
-	err = w.WriteDirectories([]writerhelper.WriteDirectory{
-		{Directory: "/scratch", Perm: 01777},
-		{Directory: "/var/tmp", Perm: 01777},
-		{Directory: "/var/lib/dbus", Perm: 0755},
-		{Directory: "/tmp", Perm: 01777},
-		{Directory: "/sys", Perm: 0755},
-		{Directory: "/proc", Perm: 0755},
-		{Directory: "/run", Perm: 0755},
-		{Directory: "/usr", Perm: 0755},
-		{Directory: "/usr/bin", Perm: 0755},
-		{Directory: "/lib64", Perm: 0755},
-	})
-	if err != nil {
-		return -1, fmt.Errorf("failed to write directories: %w", err)
-	}
-
-	err = w.WriteSymlink("/run", "/var/run", 0755)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write /var/run symlink: %w", err)
-	}
-
-	if mergedUsrSystem() {
-		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
-			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
-			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
-			{Target: "/usr/lib", Link: "/lib", Perm: 0755},
-			{Target: "/usr/lib64", Link: "/lib64", Perm: 0755},
-		})
-		if err != nil {
-			return -1, fmt.Errorf("failed to write merged-usr symlinks: %w", err)
-		}
-	} else {
-		err = w.WriteDirectories([]writerhelper.WriteDirectory{
-			{Directory: "/sbin", Perm: 0744},
-			{Directory: "/bin", Perm: 0755},
-			{Directory: "/lib", Perm: 0755},
-		})
-		if err != nil {
-			return -1, fmt.Errorf("failed to write non-merged-usr directories: %w", err)
-		}
-	}
-
-	prefix := ""
-	if mergedUsrSystem() {
-		prefix = "/usr"
-	}
-
-	// search for busybox; in some distros it's located under /sbin
-	busybox, err := exec.LookPath("busybox")
-	if err != nil {
-		return -1, fmt.Errorf("failed to find busybox: %w", err)
-	}
-	err = w.CopyFileTo(busybox, prefix+"/bin/busybox")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy busybox: %w", err)
-	}
-
-	/* Ensure systemd-resolved is available */
-	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
-		return -1, fmt.Errorf("systemd-resolved not found: %w", err)
-	}
-
-	dynamicLinker := archDynamicLinker[m.arch]
-	err = w.CopyFile(prefix + dynamicLinker)
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy dynamic linker: %w", err)
-	}
-
-	/* C libraries */
-	libraryDir, err := realDir(dynamicLinker)
-	if err != nil {
+	if err := m.buildInitrd(command, extracontent); err != nil {
 		return -1, err
 	}
-	err = w.CopyFile(libraryDir + "/libc.so.6")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy libc.so.6: %w", err)
-	}
-	err = w.CopyFile(libraryDir + "/libresolv.so.2")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy libresolv.so.2: %w", err)
-	}
-
-	err = w.WriteCharDevice("/dev/console", 5, 1, 0700)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write /dev/console device: %w", err)
-	}
-
-	// Linker configuration
-	err = w.CopyFile("/etc/ld.so.conf")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy ld.so.conf: %w", err)
-	}
-
-	err = w.CopyTree("/etc/ld.so.conf.d")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy ld.so.conf.d: %w", err)
-	}
-
-	// Core system configuration
-	err = w.WriteFile("/etc/machine-id", "", 0444)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write machine-id: %w", err)
-	}
-
-	err = w.WriteFile("/etc/hostname", "fakemachine", 0444)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write hostname: %w", err)
-	}
-
-	err = w.CopyFile("/etc/passwd")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy passwd: %w", err)
-	}
-
-	err = w.CopyFile("/etc/group")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy group: %w", err)
-	}
-
-	err = w.CopyFile("/etc/nsswitch.conf")
-	if err != nil {
-		return -1, fmt.Errorf("failed to copy nsswitch.conf: %w", err)
-	}
-
-	// udev rules
-	udevRules := strings.Join(backend.UdevRules(), "\n") + "\n"
-	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write udev rules: %w", err)
-	}
-
-	err = w.WriteFile("/etc/systemd/network/ethernet.network",
-		networkdTemplate, 0444)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write ethernet.network: %w", err)
-	}
-
-	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
-		networkdLinkTemplate, 0444)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write ethernet.link: %w", err)
-	}
-
-	err = w.WriteSymlink(
-		"/lib/systemd/resolv.conf",
-		"/etc/resolv.conf",
-		0755)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write resolv.conf symlink: %w", err)
-	}
-
-	err = m.writerKernelModules(w, kernelModuleDir, backend.InitModules())
-	if err != nil {
-		return -1, fmt.Errorf("failed to write kernel modules: %w", err)
-	}
-
-	err = w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write fakemachine.service: %w", err)
-	}
-
-	err = w.WriteSymlink(
-		"/lib/systemd/system/serial-getty@ttyS0.service",
-		"/dev/null",
-		0755)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write serial-getty symlink: %w", err)
-	}
-
-	err = w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, command), 0755)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write wrapper script: %w", err)
-	}
-
-	init, err := executeInitScriptTemplate(m, backend)
-	if err != nil {
-		return -1, err
-	}
-
-	err = w.WriteFileRaw("/init", init, 0755)
-	if err != nil {
-		return -1, fmt.Errorf("failed to write init script: %w", err)
-	}
-
-	err = m.generateFstab(w, backend)
-	if err != nil {
-		return -1, fmt.Errorf("failed to generate fstab: %w", err)
-	}
-
-	for _, v := range extracontent {
-		err = w.CopyFileTo(v[0], v[1])
-		if err != nil {
-			return -1, fmt.Errorf("failed to copy extra content %s: %w", v[0], err)
-		}
-	}
-
-	w.Close()
-	f.Close()
 
 	if !m.quiet {
-		fmt.Printf("Running %s using %s backend\n", command, backend.Name())
+		fmt.Printf("Running %s using %s backend\n", command, m.backend.Name())
 	}
 
-	success, err := backend.Start()
+	success, err := m.backend.Start()
 	if !success || err != nil {
-		return -1, fmt.Errorf("error starting %s backend: %w", backend.Name(), err)
+		return -1, fmt.Errorf("error starting %s backend: %w", m.backend.Name(), err)
 	}
 
 	result, err := os.Open(path.Join(tmpdir, "result"))
