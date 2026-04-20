@@ -942,7 +942,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 	defer result.Close()
 
-	exitstr, _ := io.ReadAll(result)
+	exitstr, err := io.ReadAll(result)
+	if err != nil {
+		return -1, fmt.Errorf("failed to read result file: %w", err)
+	}
 	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
 
 	if err != nil {
