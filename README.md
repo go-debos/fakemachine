@@ -11,18 +11,20 @@ fakemachine [--help]
 
 Application Options:
 ```
-  -b, --backend=[auto|kvm|uml|qemu] Virtualisation backend to use (default: auto)
-  -v, --volume=                     volume to mount
-  -i, --image=                      image to add
-  -e, --environ-var=                Environment variables (use -e VARIABLE:VALUE syntax)
-  -m, --memory=                     Amount of memory for the fakemachine in megabytes
-  -c, --cpus=                       Number of CPUs for the fakemachine
-  -s, --scratchsize=                On-disk scratch space size (with a unit suffix, e.g. 4G); if unset,
-                                    memory backed scratch space is used
-      --show-boot                   Show boot/console messages from the fakemachine
+  -b, --backend=[auto|kvm|qemu] Virtualisation backend to use (default: auto)
+  -v, --volume=                 volume to mount
+  -i, --image=                  image to add
+  -e, --environ-var=            Environment variables (use -e VARIABLE:VALUE syntax)
+  -m, --memory=                 Amount of memory for the fakemachine in megabytes
+  -c, --cpus=                   Number of CPUs for the fakemachine
+  -S, --sectorsize=             Override image sector size
+  -s, --scratchsize=            On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used
+      --show-boot               Show boot/console messages from the fakemachine
+  -q, --quiet                   Don't show logs from fakemachine or the backend; only print the command's stdout/stderr
+      --version                 Print fakemachine version
 
 Help Options:
-  -h, --help                        Show this help message
+  -h, --help                    Show this help message
 ```
 
 ## Installation
