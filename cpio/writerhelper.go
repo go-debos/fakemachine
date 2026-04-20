@@ -258,7 +258,7 @@ func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) error {
 	out := new(bytes.Buffer)
 	err = fn(out, f)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to transform source file %s: %w", src, err)
 	}
 
 	hdr := new(cpio.Header)
