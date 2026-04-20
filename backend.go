@@ -12,7 +12,6 @@ func implementedBackends(m *Machine) []backend {
 	return []backend{
 		newKvmBackend(m),
 		newQemuBackend(m),
-		newUmlBackend(m),
 	}
 }
 
@@ -43,11 +42,6 @@ func newBackend(name string, m *Machine) (backend, error) {
 	if name == "auto" {
 		for _, backend := range backends {
 			backendName := backend.Name()
-
-			/* The user-mode-linux backend is flaky, don't allow users to auto-select it */
-			if backendName == "uml" {
-				continue
-			}
 
 			b, backendErr := newBackend(backendName, m)
 			if backendErr != nil {
