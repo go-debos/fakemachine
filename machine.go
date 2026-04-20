@@ -637,12 +637,13 @@ func (m *Machine) setupscratch() error {
 		return fmt.Errorf("failed to create temp file for scratch: %w", err)
 	}
 	m.scratchfile = tmpfile.Name()
+	tmpfile.Close()
 
-	m.scratchdev, err = m.CreateImageWithLabel(tmpfile.Name(), m.scratchsize, "fake-scratch")
+	m.scratchdev, err = m.CreateImageWithLabel(m.scratchfile, m.scratchsize, "fake-scratch")
 	if err != nil {
 		return err
 	}
-	mkfs := exec.Command("mkfs.ext4", "-q", tmpfile.Name())
+	mkfs := exec.Command("mkfs.ext4", "-q", m.scratchfile)
 	err = mkfs.Run()
 	if err != nil {
 		return fmt.Errorf("failed to format scratch disk: %w", err)
