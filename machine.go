@@ -197,11 +197,12 @@ type Machine struct {
 	quiet      bool
 	Environ    []string
 
-	scratchsize int64
-	scratchpath string
-	scratchfile string
-	scratchdev  string
-	initrdpath  string
+	scratchsize     int64
+	scratchpath     string
+	scratchfile     string
+	scratchdev      string
+	scratchMkfsArgs []string
+	initrdpath      string
 }
 
 // Create a new machine object with the auto backend
@@ -537,6 +538,12 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	}
 }
 
+// SetScratchMkfsArgs sets extra arguments passed to mkfs.ext4 when creating
+// the scratch filesystem.
+func (m *Machine) SetScratchMkfsArgs(args []string) {
+	m.scratchMkfsArgs = args
+}
+
 func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
@@ -636,7 +643,10 @@ func (m *Machine) setupscratch() error {
 	if err != nil {
 		return err
 	}
-	mkfs := exec.Command("mkfs.ext4", "-q", tmpfile.Name())
+
+	mkfsArgs := append([]string{"-q"}, m.scratchMkfsArgs...)
+	mkfsArgs = append(mkfsArgs, tmpfile.Name())
+	mkfs := exec.Command("mkfs.ext4", mkfsArgs...)
 	err = mkfs.Run()
 
 	return err
