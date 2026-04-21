@@ -931,12 +931,19 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		fmt.Printf("Running %s using %s backend\n", command, m.backend.Name())
 	}
 
+	// Set a default result of failure so that if the backend fails to start
+	// we get a defined exit code instead of an error reading the result file.
+	resultPath := path.Join(tmpdir, "result")
+	if err := os.WriteFile(resultPath, []byte("1"), 0644); err != nil {
+		return -1, fmt.Errorf("failed to create result file: %w", err)
+	}
+
 	success, err := m.backend.Start()
 	if !success || err != nil {
 		return -1, fmt.Errorf("error starting %s backend: %w", m.backend.Name(), err)
 	}
 
-	result, err := os.Open(path.Join(tmpdir, "result"))
+	result, err := os.Open(resultPath)
 	if err != nil {
 		return -1, fmt.Errorf("failed to open result file: %w", err)
 	}
