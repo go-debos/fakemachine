@@ -92,7 +92,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 	release, _ := m.backend.KernelRelease()
 	modpath := getModPath(modname, release)
 	if modpath == "" {
-		return fmt.Errorf("kernel module '%s' not found for kernel release '%s'", modname, release)
+		return fmt.Errorf("kernel module %q not found for kernel release %q", modname, release)
 	}
 
 	if modpath == "(builtin)" || copiedModules[modname] {
@@ -448,12 +448,12 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 	}
 
 	if len(label) >= 20 {
-		return "", fmt.Errorf("label '%s' too long; cannot be more then 20 characters", label)
+		return "", fmt.Errorf("image label %q too long; cannot be more than 20 characters", label)
 	}
 
 	for _, image := range m.images {
 		if image.label == label {
-			return "", fmt.Errorf("label '%s' already exists", label)
+			return "", fmt.Errorf("image with label %q already exists", label)
 		}
 	}
 
