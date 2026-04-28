@@ -592,11 +592,7 @@ func (m *Machine) SetQuiet(quiet bool) {
 // Path is "" then the working directory is used as a default storage location
 func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchsize = scratchsize
-	if path == "" {
-		m.scratchpath, _ = os.Getwd()
-	} else {
-		m.scratchpath = path
-	}
+	m.scratchpath = path
 }
 
 func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
@@ -712,6 +708,14 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 func (m *Machine) setupscratch() error {
 	if m.scratchsize == 0 {
 		return nil
+	}
+
+	if m.scratchpath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory for scratch path: %w", err)
+		}
+		m.scratchpath = cwd
 	}
 
 	tmpfile, err := os.CreateTemp(m.scratchpath, "fake-scratch.img.")

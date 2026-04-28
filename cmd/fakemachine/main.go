@@ -213,6 +213,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse scratch size: %v\n", err)
 			os.Exit(1)
 		}
+
+		// Use the current working directory as the default scratch file location
 		m.SetScratch(size, "")
 	}
 
