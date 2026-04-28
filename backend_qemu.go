@@ -4,6 +4,7 @@ package fakemachine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -120,9 +121,17 @@ func (b qemuBackend) KernelPath() (string, error) {
 	 * ... perhaps because systemd requires it to allow hibernation
 	 * https://github.com/systemd/systemd/commit/edda44605f06a41fb86b7ab8128dcf99161d2344
 	 */
-	if moddir, err := b.ModulePath(); err == nil {
+	moddir, err := b.ModulePath()
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("failed to get kernel module path: %w", err)
+	}
+	if err == nil {
 		kernelPath := path.Join(moddir, "vmlinuz")
-		if _, err := os.Stat(kernelPath); err == nil {
+		if _, err := os.Stat(kernelPath); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return "", fmt.Errorf("failed to stat kernel path %s: %w", kernelPath, err)
+			}
+		} else {
 			return kernelPath, nil
 		}
 	}
@@ -133,9 +142,13 @@ func (b qemuBackend) KernelPath() (string, error) {
 		return "", err
 	}
 
-	kernelPath := "/boot/vmlinuz-" + kernelRelease
+	kernelPath := path.Join("/boot", "vmlinuz-"+kernelRelease)
 	if _, err := os.Stat(kernelPath); err != nil {
-		return "", fmt.Errorf("kernel not found at %s: %w", kernelPath, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("kernel not found at %s", kernelPath)
+		}
+
+		return "", fmt.Errorf("failed to stat kernel path %s: %w", kernelPath, err)
 	}
 
 	return kernelPath, nil
