@@ -92,10 +92,10 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 		switch sectorsize {
 		case 512:
 			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage512SectorSize", backendName})
-			require.Equal(t, exitcode, 0)
+			require.Equal(t, 0, exitcode)
 		case 4096:
 			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage4kSectorSize", backendName})
-			require.Equal(t, exitcode, 0)
+			require.Equal(t, 0, exitcode)
 		default:
 			t.Fatalf("Unhandled sector size %d", sectorsize)
 		}
@@ -128,7 +128,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 
 		fields := strings.Fields(line)
 		if fields[1] == mountpoint {
-			require.Equal(t, fields[2], fstype)
+			require.Equal(t, fstype, fields[2])
 			return
 		}
 	}
@@ -210,18 +210,18 @@ func TestImageLabel(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
-		require.Equal(t, len(devices), 2, "Only expected two devices")
+		require.Equal(t, 2, len(devices), "Only expected two devices")
 
 		autolabel := devices[0]
 		labeled := devices[1]
 
 		info, err := os.Stat(autolabel)
 		require.Nil(t, err)
-		require.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		require.Equal(t, os.ModeDevice, info.Mode()&os.ModeType, "Expected a device")
 
 		info, err = os.Stat(labeled)
 		require.Nil(t, err)
-		require.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		require.Equal(t, os.ModeDevice, info.Mode()&os.ModeType, "Expected a device")
 
 		return
 	}
@@ -251,7 +251,7 @@ func TestVolumes(t *testing.T) {
 	m.AddVolume("random_directory_never_exists")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
-	require.Equal(t, exitcode, -1)
+	require.Equal(t, -1, exitcode)
 	require.Error(t, err)
 
 	/* Try to mount a device file into the machine */
@@ -259,7 +259,7 @@ func TestVolumes(t *testing.T) {
 	m.AddVolume("/dev/zero")
 
 	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
-	require.Equal(t, exitcode, -1)
+	require.Equal(t, -1, exitcode)
 	require.Error(t, err)
 
 	/* Try to mount a volume with whitespace into the machine */
@@ -267,7 +267,7 @@ func TestVolumes(t *testing.T) {
 	m.AddVolumeAt("/dev", "/dev ices")
 
 	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
-	require.Equal(t, exitcode, -1)
+	require.Equal(t, -1, exitcode)
 	require.Error(t, err)
 }
 
@@ -301,7 +301,7 @@ func TestCommandEscaping(t *testing.T) {
 	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
-		require.Equal(t, testArg, "$s'n\\akes")
+		require.Equal(t, "$s'n\\akes", testArg)
 		t.Log(testArg)
 		return
 	}
