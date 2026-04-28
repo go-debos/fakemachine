@@ -57,48 +57,43 @@ func TestImage(t *testing.T) {
 	require.Equal(t, 0, exitcode)
 }
 
-func AssertDevSectorSize(t *testing.T, device string, sectorsize int) {
-	bstypes := []string{"physical", "logical"}
-	for _, bstype := range bstypes {
-		path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
-		f, err := os.Open(path)
-		require.NoError(t, err)
-		defer f.Close()
-
-		blkdev := bufio.NewReader(f)
-		line, err := blkdev.ReadString('\n')
-		require.NoError(t, err)
-
-		line = strings.TrimSuffix(line, "\n")
-		sz, err := strconv.Atoi(line)
-		require.NoError(t, err)
-
-		require.Equal(t, sectorsize, sz)
-	}
-}
-
 func AssertSectorSize(t *testing.T, sectorsize int) {
-	if !InMachine() {
-		t.Parallel()
-		m := CreateMachine(t)
-		m.SetSectorSize(sectorsize)
-		_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
-		require.NoError(t, err)
-		switch sectorsize {
-		case 512:
-			exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestImage512SectorSize", backendName})
+	t.Helper()
+	t.Parallel()
+	if InMachine() {
+		for _, bstype := range []string{"physical", "logical"} {
+			device := "vda"
+			path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
+
+			data, err := os.ReadFile(path)
 			require.NoError(t, err)
-			require.Equal(t, 0, exitcode)
-		case 4096:
-			exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestImage4kSectorSize", backendName})
+
+			sz, err := strconv.Atoi(strings.TrimSpace(string(data)))
 			require.NoError(t, err)
-			require.Equal(t, 0, exitcode)
-		default:
-			t.Fatalf("Unhandled sector size %d", sectorsize)
+
+			require.Equal(t, sectorsize, sz)
 		}
-	} else {
-		AssertDevSectorSize(t, "vda", sectorsize)
+		return
 	}
+
+	m := CreateMachine(t)
+	m.SetSectorSize(sectorsize)
+	_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
+	require.NoError(t, err)
+
+	testName := ""
+	switch sectorsize {
+	case 512:
+		testName = "TestImage512SectorSize"
+	case 4096:
+		testName = "TestImage4kSectorSize"
+	default:
+		t.Fatalf("Unhandled sector size %d", sectorsize)
+	}
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", testName, backendName})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestImage512SectorSize(t *testing.T) {
