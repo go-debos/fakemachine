@@ -82,22 +82,30 @@ func (b qemuBackend) KernelRelease() (string, error) {
 	if err := unix.Uname(&u); err != nil {
 		return "", fmt.Errorf("failed to get kernel release: %w", err)
 	}
-	release := string(u.Release[:bytes.IndexByte(u.Release[:], 0)])
 
-	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
+	n := bytes.IndexByte(u.Release[:], 0)
+	if n < 0 {
+		n = len(u.Release)
+	}
+	release := string(u.Release[:n])
+
+	moduleDir := path.Join("/lib/modules", release)
+	if _, err := os.Stat(moduleDir); err == nil {
 		return release, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("checking module directory %s: %w", moduleDir, err)
 	}
 
 	files, err := os.ReadDir("/lib/modules")
 	if err != nil {
-		return "", fmt.Errorf("failed to read /lib/modules: %w", err)
+		return "", fmt.Errorf("listing /lib/modules: %w", err)
 	}
 
 	for i := len(files) - 1; i >= 0; i-- {
 		/* Ensure the kernel name starts with a digit, in order
 		 * to filter out 'extramodules-ARCH' on ArchLinux */
 		filename := files[i].Name()
-		if filename[0] >= '0' && filename[0] <= '9' {
+		if len(filename) > 0 && filename[0] >= '0' && filename[0] <= '9' {
 			return filename, nil
 		}
 	}
