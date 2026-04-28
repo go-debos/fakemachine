@@ -563,10 +563,10 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 
 func stripCompressionSuffix(module string) (string, error) {
 	for suffix := range suffixes {
-		if strings.HasSuffix(module, suffix) {
-			// The suffix is the complete thing - ".ko.foobar"
-			// Reinstate the required ".ko" part, after trimming.
-			return strings.TrimSuffix(module, suffix) + ".ko", nil
+		// The suffix is the complete thing - ".ko.foobar"
+		// Reinstate the required ".ko" part, after trimming.
+		if trimmed, ok := strings.CutSuffix(module, suffix); ok {
+			return trimmed + ".ko", nil
 		}
 	}
 	return "", errors.New("module extension/suffix unknown")
