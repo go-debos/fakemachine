@@ -197,6 +197,21 @@ func (m *Machine) addVolumeIfExists(volumePath string) (bool, error) {
 	return true, nil
 }
 
+func (m *Machine) addVolumesWithGlob(pattern string) error {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("glob %s: %w", pattern, err)
+	}
+
+	for _, volumePath := range matches {
+		if _, err := m.addVolumeIfExists(volumePath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type Arch string
 
 const (
@@ -291,12 +306,8 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	}
 
 	// Mounts for java VM configuration, especially security policies
-	matches, _ := filepath.Glob("/etc/java*")
-	for _, path := range matches {
-		stat, err := os.Stat(path)
-		if err == nil && stat.IsDir() {
-			m.AddVolume(path)
-		}
+	if err := m.addVolumesWithGlob("/etc/java*"); err != nil {
+		return nil, err
 	}
 
 	// Dbus configuration
