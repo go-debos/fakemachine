@@ -22,7 +22,7 @@ func init() {
 
 func CreateMachine(t *testing.T) *Machine {
 	machine, err := NewMachineWithBackend(backendName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	machine.SetNumCPUs(2)
 
 	return machine
@@ -54,7 +54,7 @@ func TestImage(t *testing.T) {
 	m := CreateMachine(t)
 
 	_, err := m.CreateImage("test.img", 1024*1024)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	exitcode, _ := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
 
 	if exitcode != 0 {
@@ -67,16 +67,16 @@ func AssertDevSectorSize(t *testing.T, device string, sectorsize int) {
 	for _, bstype := range bstypes {
 		path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
 		f, err := os.Open(path)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		defer f.Close()
 
 		blkdev := bufio.NewReader(f)
 		line, err := blkdev.ReadString('\n')
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		line = strings.TrimSuffix(line, "\n")
 		sz, err := strconv.Atoi(line)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		require.Equal(t, sectorsize, sz)
 	}
@@ -88,7 +88,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 		m := CreateMachine(t)
 		m.SetSectorSize(sectorsize)
 		_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		switch sectorsize {
 		case 512:
 			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage512SectorSize", backendName})
@@ -114,7 +114,7 @@ func TestImage4kSectorSize(t *testing.T) {
 
 func AssertMount(t *testing.T, mountpoint, fstype string) {
 	m, err := os.Open("/proc/self/mounts")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	mtab := bufio.NewReader(m)
 
@@ -124,7 +124,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 			require.Fail(t, "mountpoint not found")
 			break
 		}
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		fields := strings.Fields(line)
 		if fields[1] == mountpoint {
@@ -216,11 +216,11 @@ func TestImageLabel(t *testing.T) {
 		labeled := devices[1]
 
 		info, err := os.Stat(autolabel)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, os.ModeDevice, info.Mode()&os.ModeType, "Expected a device")
 
 		info, err = os.Stat(labeled)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, os.ModeDevice, info.Mode()&os.ModeType, "Expected a device")
 
 		return
@@ -228,10 +228,10 @@ func TestImageLabel(t *testing.T) {
 
 	m := CreateMachine(t)
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImageLabel", autolabel, labeled})
 	if exitcode != 0 {
