@@ -264,9 +264,7 @@ func TestDiskSuffix(t *testing.T) {
 		{52, "ba"}, {701, "zz"}, {702, "aaa"},
 	}
 	for _, c := range cases {
-		if got := diskSuffix(c.i); got != c.want {
-			t.Errorf("diskSuffix(%d) = %q, want %q", c.i, got, c.want)
-		}
+		require.Equal(t, c.want, diskSuffix(c.i), "diskSuffix(%d)", c.i)
 	}
 }
 
