@@ -34,21 +34,16 @@ func TestSuccessfulCommand(t *testing.T) {
 
 	exitcode, err := m.Run("ls /")
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Expected 0 but got %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func TestCommandNotFound(t *testing.T) {
 	t.Parallel()
 	m := CreateMachine(t)
+
 	exitcode, err := m.Run("/a/b/c /")
 	require.NoError(t, err)
-
-	if exitcode != 127 {
-		t.Fatalf("Expected 127 but got %d", exitcode)
-	}
+	require.Equal(t, 127, exitcode)
 }
 
 func TestImage(t *testing.T) {
@@ -59,10 +54,7 @@ func TestImage(t *testing.T) {
 	require.NoError(t, err)
 	exitcode, err := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func AssertDevSectorSize(t *testing.T, device string, sectorsize int) {
@@ -150,10 +142,7 @@ func TestScratchTmp(t *testing.T) {
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchTmp"})
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func TestScratchDisk(t *testing.T) {
@@ -168,10 +157,7 @@ func TestScratchDisk(t *testing.T) {
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Test for device mount on scratch failed with %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func TestMemory(t *testing.T) {
@@ -191,10 +177,7 @@ fi
 `
 	exitcode, err := m.Run(command)
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Test for set memory failed with %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func TestSpawnMachine(t *testing.T) {
@@ -208,10 +191,7 @@ func TestSpawnMachine(t *testing.T) {
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestSpawnMachine"})
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func TestImageLabel(t *testing.T) {
@@ -244,9 +224,7 @@ func TestImageLabel(t *testing.T) {
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestImageLabel", autolabel, labeled})
 	require.NoError(t, err)
-	if exitcode != 0 {
-		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
 
 func TestVolumes(t *testing.T) {
@@ -321,8 +299,5 @@ func TestCommandEscaping(t *testing.T) {
 		"-test.v", "-test.run",
 		"TestCommandEscaping", "-testarg", "$s'n\\akes"})
 	require.NoError(t, err)
-
-	if exitcode != 0 {
-		t.Fatalf("Expected 0 but got %d", exitcode)
-	}
+	require.Equal(t, 0, exitcode)
 }
