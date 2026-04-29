@@ -13,33 +13,38 @@ import (
 	"github.com/go-debos/fakemachine/cpio"
 )
 
-func checkStreamsMatch(t *testing.T, output, check io.Reader) error {
-	i := 0
+func checkStreamsMatch(output, check io.Reader) error {
+	var i int64
+
 	oreader := bufio.NewReader(output)
 	creader := bufio.NewReader(check)
+
 	for {
 		ochar, oerr := oreader.ReadByte()
+		if oerr != nil && !errors.Is(oerr, io.EOF) {
+			return fmt.Errorf("read output stream at byte %d: %w", i, oerr)
+		}
+
 		cchar, cerr := creader.ReadByte()
-		if oerr != nil || cerr != nil {
-			if oerr == io.EOF && cerr == io.EOF {
+		if cerr != nil && !errors.Is(cerr, io.EOF) {
+			return fmt.Errorf("read check stream at byte %d: %w", i, cerr)
+		}
+
+		if errors.Is(oerr, io.EOF) || errors.Is(cerr, io.EOF) {
+			switch {
+			case errors.Is(oerr, io.EOF) && errors.Is(cerr, io.EOF):
 				return nil
+			case errors.Is(oerr, io.EOF):
+				return fmt.Errorf("output stream shorter than check stream at byte %d", i)
+			default:
+				return fmt.Errorf("check stream shorter than output stream at byte %d", i)
 			}
-			if oerr != nil && oerr != io.EOF {
-				t.Errorf("Error reading output stream: %v", oerr)
-				return fmt.Errorf("error reading output stream: %w", oerr)
-			}
-			if cerr != nil && cerr != io.EOF {
-				t.Errorf("Error reading check stream: %v", cerr)
-				return fmt.Errorf("error reading check stream: %w", cerr)
-			}
-			return nil
 		}
 
 		if ochar != cchar {
-			t.Errorf("Mismatch at byte %d, values %d (output) and %d (check)",
-				i, ochar, cchar)
-			return errors.New("Data mismatch")
+			return fmt.Errorf("data mismatch at byte %d: output=0x%02x check=0x%02x", i, ochar, cchar)
 		}
+
 		i++
 	}
 }
@@ -66,8 +71,7 @@ func decompressorTest(t *testing.T, file, suffix string, d writerhelper.Transfor
 	}
 	defer checkFile.Close()
 
-	err = checkStreamsMatch(t, output, checkFile)
-	if err != nil {
+	if err = checkStreamsMatch(output, checkFile); err != nil {
 		t.Errorf("Failed to compare streams: %s", err)
 		return
 	}
