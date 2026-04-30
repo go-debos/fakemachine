@@ -184,11 +184,12 @@ func (w *WriterHelper) CopyTree(path string) error {
 		if err != nil {
 			return fmt.Errorf("error visiting %s: %w", p, err)
 		}
-		if info.Mode().IsDir() {
+		switch {
+		case info.Mode().IsDir():
 			err = w.WriteDirectory(p, info.Mode() & ^os.ModeType)
-		} else if info.Mode().IsRegular() {
+		case info.Mode().IsRegular():
 			err = w.CopyFile(p)
-		} else {
+		default:
 			err = fmt.Errorf("file type not handled for %s", p)
 		}
 
