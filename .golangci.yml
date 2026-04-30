@@ -23,6 +23,7 @@ linters:
     - gocritic
     - prealloc
     - noctx
+    - testifylint
   exclusions:
     presets:
       - comments

@@ -199,7 +199,7 @@ func TestImageLabel(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
-		require.Equal(t, 2, len(devices), "Only expected two devices")
+		require.Len(t, devices, 2, "Only expected two devices")
 
 		autolabel := devices[0]
 		labeled := devices[1]
