@@ -24,6 +24,7 @@ linters:
     - prealloc
     - noctx
     - testifylint
+    - unparam
   exclusions:
     presets:
       - comments
