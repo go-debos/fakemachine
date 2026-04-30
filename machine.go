@@ -1058,7 +1058,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	if err != nil {
 		return -1, fmt.Errorf("failed to open result file: %w", err)
 	}
-	defer result.Close()
+	defer func() {
+		if closeErr := result.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close result file: %w", closeErr))
+		}
+	}()
 
 	exitstr, err := io.ReadAll(result)
 	if err != nil {
