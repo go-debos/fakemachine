@@ -9,6 +9,17 @@ linters:
     - staticcheck
     - whitespace
     - wrapcheck
+    - ineffassign
+    - unused
+    - unconvert
+    - bodyclose
+    - copyloopvar
+    - nilerr
+    - nilnil
+    - wastedassign
+    - maintidx
+    - nakedret
+    - predeclared
   exclusions:
     presets:
       - comments
