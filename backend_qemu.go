@@ -161,7 +161,7 @@ func (b qemuBackend) ModulePath() (string, error) {
 	}
 
 	moddir := "/lib/modules"
-	if mergedUsrSystem() {
+	if b.machine.mergedUsr {
 		moddir = "/usr/lib/modules"
 	}
 

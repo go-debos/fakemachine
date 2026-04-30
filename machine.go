@@ -22,10 +22,13 @@ import (
 	writerhelper "github.com/go-debos/fakemachine/cpio"
 )
 
-func mergedUsrSystem() bool {
-	f, _ := os.Lstat("/bin")
+func mergedUsrSystem() (bool, error) {
+	f, err := os.Lstat("/bin")
+	if err != nil {
+		return false, fmt.Errorf("failed to stat '/bin': %w", err)
+	}
 
-	return (f.Mode() & os.ModeSymlink) == os.ModeSymlink
+	return (f.Mode() & os.ModeSymlink) == os.ModeSymlink, nil
 }
 
 // Parse modinfo output and return the value of module attributes
@@ -126,7 +129,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 
 			// Ensure destination has /usr prefix if running
 			// on merged-usr system.
-			if mergedUsrSystem() && !strings.HasPrefix(dest, "/usr") {
+			if m.mergedUsr && !strings.HasPrefix(dest, "/usr") {
 				dest = "/usr" + dest
 			}
 
@@ -210,6 +213,7 @@ type Machine struct {
 	sectorSize int
 	showBoot   bool
 	quiet      bool
+	mergedUsr  bool
 	Environ    []string
 
 	scratchsize int64
@@ -242,7 +246,13 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	// usr is mounted by specific label via /init
 	m.addStaticVolume("/usr", "usr")
 
-	if !mergedUsrSystem() {
+	// check if the host is a merged-usr system
+	m.mergedUsr, err = mergedUsrSystem()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if the host is a merged-usr system: %w", err)
+	}
+
+	if !m.mergedUsr {
 		m.addStaticVolume("/sbin", "sbin")
 		m.addStaticVolume("/bin", "bin")
 		m.addStaticVolume("/lib", "lib")
@@ -740,7 +750,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 		return fmt.Errorf("failed to write /var/run symlink: %w", err)
 	}
 
-	if mergedUsrSystem() {
+	if m.mergedUsr {
 		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
 			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
 			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
@@ -762,7 +772,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 	}
 
 	prefix := ""
-	if mergedUsrSystem() {
+	if m.mergedUsr {
 		prefix = "/usr"
 	}
 
