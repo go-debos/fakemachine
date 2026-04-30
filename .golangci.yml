@@ -1,12 +1,46 @@
 version: "2"
 linters:
   enable:
+    - asasalint
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
+    - durationcheck
     - errcheck
+    - errchkjson
+    - errname
     - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forcetypeassert
+    - gocheckcompilerdirectives
+    - godox
+    - goprintffuncname
     - govet
+    - ineffassign
+    - intrange
+    - makezero
+    - mirror
     - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - nolintlint
+    - predeclared
+    - reassign
     - revive
     - staticcheck
+    - testableexamples
+    - tparallel
+    - unconvert
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
     - whitespace
     - wrapcheck
   exclusions:
