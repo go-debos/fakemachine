@@ -19,9 +19,11 @@ func implementedBackends(m *Machine) []backend {
  * "auto" backend chooses them.
  */
 func BackendNames() []string {
-	names := []string{"auto"}
+	backends := implementedBackends(nil)
+	names := make([]string, 0, 1+len(backends))
+	names = append(names, "auto")
 
-	for _, backend := range implementedBackends(nil) {
+	for _, backend := range backends {
 		names = append(names, backend.Name())
 	}
 

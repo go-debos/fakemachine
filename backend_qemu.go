@@ -177,7 +177,7 @@ func (b qemuBackend) ModulePath() (string, error) {
 }
 
 func (b qemuBackend) UdevRules() []string {
-	udevRules := []string{}
+	udevRules := make([]string, 0, 2*len(b.machine.images))
 
 	// create symlink under /dev/disk/by-fakemachine-label/ for each virtual image
 	for i, img := range b.machine.images {

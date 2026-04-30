@@ -21,6 +21,7 @@ linters:
     - nakedret
     - predeclared
     - gocritic
+    - prealloc
   exclusions:
     presets:
       - comments
