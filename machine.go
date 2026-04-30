@@ -3,7 +3,6 @@
 package fakemachine
 
 import (
-	"al.essio.dev/pkg/shellescape"
 	"bufio"
 	"bytes"
 	"errors"
@@ -18,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"al.essio.dev/pkg/shellescape"
 
 	writerhelper "github.com/go-debos/fakemachine/cpio"
 )
@@ -190,7 +191,6 @@ func realDir(path string) (string, error) {
 // cannot be checked, it returns false and an error.
 func (m *Machine) addVolumeIfExists(volumePath string) (bool, error) {
 	stat, err := os.Stat(volumePath)
-
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
@@ -367,6 +367,7 @@ busybox modprobe {{ $m }}
 
 exec /lib/systemd/systemd
 `
+
 const networkdTemplate = `
 [Match]
 Type=ether
@@ -527,7 +528,7 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_
 		flags |= os.O_CREATE
 	}
 
-	i, err := os.OpenFile(path, flags, 0666)
+	i, err := os.OpenFile(path, flags, 0o666)
 	if err != nil {
 		if size < 0 {
 			return "", fmt.Errorf("failed to open existing image file %s: %w", path, err)
@@ -625,7 +626,7 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 	}
 	fstab = append(fstab, "")
 
-	err := w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
+	err := w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write fstab: %w", err)
 	}
@@ -680,7 +681,7 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	}
 
 	path := path.Join(moddir, "modules.dep")
-	if err := w.WriteFile(path, strings.Join(output, "\n"), 0644); err != nil {
+	if err := w.WriteFile(path, strings.Join(output, "\n"), 0o644); err != nil {
 		return fmt.Errorf("failed to write modules.dep: %w", err)
 	}
 	return nil
@@ -698,7 +699,8 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 	modfiles := []string{
 		"modules.builtin",
 		"modules.alias",
-		"modules.symbols"}
+		"modules.symbols",
+	}
 
 	for _, v := range modfiles {
 		if err := w.CopyFile(moddir + "/" + v); err != nil {
@@ -766,7 +768,7 @@ func (m *Machine) cleanup() error {
 }
 
 func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err error) {
-	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create initrd file: %w", err)
 	}
@@ -790,41 +792,41 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}()
 
 	err = w.WriteDirectories([]writerhelper.WriteDirectory{
-		{Directory: "/scratch", Perm: 01777},
-		{Directory: "/var/tmp", Perm: 01777},
-		{Directory: "/var/lib/dbus", Perm: 0755},
-		{Directory: "/tmp", Perm: 01777},
-		{Directory: "/sys", Perm: 0755},
-		{Directory: "/proc", Perm: 0755},
-		{Directory: "/run", Perm: 0755},
-		{Directory: "/usr", Perm: 0755},
-		{Directory: "/usr/bin", Perm: 0755},
-		{Directory: "/lib64", Perm: 0755},
+		{Directory: "/scratch", Perm: 0o1777},
+		{Directory: "/var/tmp", Perm: 0o1777},
+		{Directory: "/var/lib/dbus", Perm: 0o755},
+		{Directory: "/tmp", Perm: 0o1777},
+		{Directory: "/sys", Perm: 0o755},
+		{Directory: "/proc", Perm: 0o755},
+		{Directory: "/run", Perm: 0o755},
+		{Directory: "/usr", Perm: 0o755},
+		{Directory: "/usr/bin", Perm: 0o755},
+		{Directory: "/lib64", Perm: 0o755},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to write directories: %w", err)
 	}
 
-	err = w.WriteSymlink("/run", "/var/run", 0755)
+	err = w.WriteSymlink("/run", "/var/run", 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write /var/run symlink: %w", err)
 	}
 
 	if m.mergedUsr {
 		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
-			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
-			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
-			{Target: "/usr/lib", Link: "/lib", Perm: 0755},
-			{Target: "/usr/lib64", Link: "/lib64", Perm: 0755},
+			{Target: "/usr/sbin", Link: "/sbin", Perm: 0o755},
+			{Target: "/usr/bin", Link: "/bin", Perm: 0o755},
+			{Target: "/usr/lib", Link: "/lib", Perm: 0o755},
+			{Target: "/usr/lib64", Link: "/lib64", Perm: 0o755},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to write merged-usr symlinks: %w", err)
 		}
 	} else {
 		err = w.WriteDirectories([]writerhelper.WriteDirectory{
-			{Directory: "/sbin", Perm: 0744},
-			{Directory: "/bin", Perm: 0755},
-			{Directory: "/lib", Perm: 0755},
+			{Directory: "/sbin", Perm: 0o744},
+			{Directory: "/bin", Perm: 0o755},
+			{Directory: "/lib", Perm: 0o755},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to write non-merged-usr directories: %w", err)
@@ -871,7 +873,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		return fmt.Errorf("failed to copy libresolv.so.2: %w", err)
 	}
 
-	err = w.WriteCharDevice("/dev/console", 5, 1, 0700)
+	err = w.WriteCharDevice("/dev/console", 5, 1, 0o700)
 	if err != nil {
 		return fmt.Errorf("failed to write /dev/console device: %w", err)
 	}
@@ -888,12 +890,12 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	// Core system configuration
-	err = w.WriteFile("/etc/machine-id", "", 0444)
+	err = w.WriteFile("/etc/machine-id", "", 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write machine-id: %w", err)
 	}
 
-	err = w.WriteFile("/etc/hostname", "fakemachine", 0444)
+	err = w.WriteFile("/etc/hostname", "fakemachine", 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write hostname: %w", err)
 	}
@@ -915,19 +917,19 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 
 	// udev rules
 	udevRules := strings.Join(m.backend.UdevRules(), "\n") + "\n"
-	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
+	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write udev rules: %w", err)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/ethernet.network",
-		networkdTemplate, 0444)
+		networkdTemplate, 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write ethernet.network: %w", err)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
-		networkdLinkTemplate, 0444)
+		networkdLinkTemplate, 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write ethernet.link: %w", err)
 	}
@@ -935,7 +937,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	err = w.WriteSymlink(
 		"/lib/systemd/resolv.conf",
 		"/etc/resolv.conf",
-		0755)
+		0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
 	}
@@ -946,7 +948,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	err = w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to write fakemachine.service: %w", err)
 	}
@@ -954,13 +956,13 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	err = w.WriteSymlink(
 		"/lib/systemd/system/serial-getty@ttyS0.service",
 		"/dev/null",
-		0755)
+		0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write serial-getty symlink: %w", err)
 	}
 
 	err = w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, command), 0755)
+		fmt.Sprintf(commandWrapper, command), 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write wrapper script: %w", err)
 	}
@@ -970,7 +972,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		return err
 	}
 
-	err = w.WriteFileRaw("/init", init, 0755)
+	err = w.WriteFileRaw("/init", init, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write init script: %w", err)
 	}
@@ -1053,7 +1055,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	// Set a default result of failure so that if the backend fails to start
 	// we get a defined exit code instead of an error reading the result file.
 	resultPath := path.Join(tmpdir, "result")
-	if err := os.WriteFile(resultPath, []byte("1"), 0644); err != nil {
+	if err := os.WriteFile(resultPath, []byte("1"), 0o644); err != nil {
 		return -1, fmt.Errorf("failed to create result file: %w", err)
 	}
 
@@ -1080,7 +1082,6 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		return -1, fmt.Errorf("failed to read result file: %w", err)
 	}
 	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
-
 	if err != nil {
 		return -1, fmt.Errorf("failed to parse exit code: %w", err)
 	}
@@ -1102,7 +1103,6 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	command := strings.Join([]string{name, quotedArgs}, " ")
 
 	executable, err := exec.LookPath(os.Args[0])
-
 	if err != nil {
 		return -1, fmt.Errorf("failed to find executable: %w", err)
 	}

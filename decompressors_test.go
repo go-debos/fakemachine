@@ -10,7 +10,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/go-debos/fakemachine/cpio"
+	writerhelper "github.com/go-debos/fakemachine/cpio"
 	"github.com/stretchr/testify/require"
 )
 
