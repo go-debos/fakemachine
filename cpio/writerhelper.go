@@ -2,6 +2,7 @@ package writerhelper
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -201,9 +202,8 @@ func (w *WriterHelper) CopyTree(path string) error {
 	return nil
 }
 
-func (w *WriterHelper) CopyFileTo(src, dst string) error {
-	err := w.ensureBaseDirectory(path.Dir(dst))
-	if err != nil {
+func (w *WriterHelper) CopyFileTo(src, dst string) (err error) {
+	if err := w.ensureBaseDirectory(path.Dir(dst)); err != nil {
 		return err
 	}
 
@@ -211,7 +211,11 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("open failed: %s - %w", src, err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close source file %s: %w", src, closeErr))
+		}
+	}()
 
 	info, err := f.Stat()
 	if err != nil {
@@ -238,9 +242,8 @@ func (w *WriterHelper) CopyFileTo(src, dst string) error {
 	return nil
 }
 
-func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) error {
-	err := w.ensureBaseDirectory(path.Dir(dst))
-	if err != nil {
+func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) (err error) {
+	if err := w.ensureBaseDirectory(path.Dir(dst)); err != nil {
 		return err
 	}
 
@@ -248,7 +251,11 @@ func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) error {
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %w", src, err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close source file %s: %w", src, closeErr))
+		}
+	}()
 
 	info, err := f.Stat()
 	if err != nil {
