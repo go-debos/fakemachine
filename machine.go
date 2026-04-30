@@ -221,8 +221,10 @@ func (m *Machine) addVolumesWithGlob(pattern string) error {
 	return nil
 }
 
+// Arch represents the CPU architecture of the fake machine.
 type Arch string
 
+// Supported architecture constants.
 const (
 	Amd64 Arch = "amd64"
 	Arm64 Arch = "arm64"
@@ -250,6 +252,8 @@ type image struct {
 	label string
 }
 
+// Machine represents a fake machine instance that runs commands in a virtual
+// environment using one of the available backends.
 type Machine struct {
 	arch       Arch
 	backend    backend
@@ -271,12 +275,12 @@ type Machine struct {
 	initrdpath  string
 }
 
-// Create a new machine object with the auto backend
+// NewMachine creates a new machine object using the auto-selected backend.
 func NewMachine() (*Machine, error) {
 	return NewMachineWithBackend("auto")
 }
 
-// Create a new machine object
+// NewMachineWithBackend creates a new machine object using the named backend.
 func NewMachineWithBackend(backendName string) (*Machine, error) {
 	var err error
 	m := &Machine{memory: 2048, numcpus: runtime.NumCPU(), sectorSize: 512}
@@ -337,13 +341,14 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	return m, nil
 }
 
+// InMachine reports whether the current process is running inside a fake machine.
 func InMachine() (ret bool) {
 	_, ret = os.LookupEnv("IN_FAKE_MACHINE")
 
 	return
 }
 
-// Check whether the auto backend is supported
+// Supported reports whether the auto backend is supported on the current machine.
 func Supported() bool {
 	_, err := newBackend("auto", nil)
 	return err == nil
@@ -686,6 +691,7 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	return nil
 }
 
+// SetEnviron sets additional environment variables to pass into the fake machine.
 func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
