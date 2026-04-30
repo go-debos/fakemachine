@@ -186,26 +186,24 @@ func realDir(path string) (string, error) {
 }
 
 // addVolumeIfExists adds volumePath as a machine volume if it exists on the host.
-//
-// It returns true if the volume was added. A missing path is not treated as an
-// error and returns false, nil. If the path exists but is not a directory, or
-// cannot be checked, it returns false and an error.
-func (m *Machine) addVolumeIfExists(volumePath string) (bool, error) {
+// A missing path is not treated as an error. If the path exists but is not a
+// directory, or cannot be checked, it returns an error.
+func (m *Machine) addVolumeIfExists(volumePath string) error {
 	stat, err := os.Stat(volumePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
+			return nil
 		}
 
-		return false, fmt.Errorf("failed to check %q: %w", volumePath, err)
+		return fmt.Errorf("failed to check %q: %w", volumePath, err)
 	}
 
 	if !stat.IsDir() {
-		return false, fmt.Errorf("failed to add volume %q: not a directory", volumePath)
+		return fmt.Errorf("failed to add volume %q: not a directory", volumePath)
 	}
 
 	m.AddVolume(volumePath)
-	return true, nil
+	return nil
 }
 
 func (m *Machine) addVolumesWithGlob(pattern string) error {
@@ -215,7 +213,7 @@ func (m *Machine) addVolumesWithGlob(pattern string) error {
 	}
 
 	for _, volumePath := range matches {
-		if _, err := m.addVolumeIfExists(volumePath); err != nil {
+		if err := m.addVolumeIfExists(volumePath); err != nil {
 			return err
 		}
 	}
@@ -309,10 +307,10 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	}
 
 	// Mounts for ssl certificates
-	if _, err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
+	if err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
 		return nil, err
 	}
-	if _, err := m.addVolumeIfExists("/etc/ssl"); err != nil {
+	if err := m.addVolumeIfExists("/etc/ssl"); err != nil {
 		return nil, err
 	}
 
@@ -322,17 +320,17 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	}
 
 	// Dbus configuration
-	if _, err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
+	if err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
 		return nil, err
 	}
 
 	// Debian alternative symlinks
-	if _, err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
+	if err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
 		return nil, err
 	}
 
 	// Debian binfmt registry
-	if _, err := m.addVolumeIfExists("/var/lib/binfmts"); err != nil {
+	if err := m.addVolumeIfExists("/var/lib/binfmts"); err != nil {
 		return nil, err
 	}
 

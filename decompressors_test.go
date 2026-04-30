@@ -50,8 +50,8 @@ func checkStreamsMatch(output, check io.Reader) error {
 	}
 }
 
-func decompressorTest(file, suffix string, d writerhelper.Transformer) (err error) {
-	testFilePath := path.Join("testdata", file+suffix)
+func decompressorTest(suffix string, d writerhelper.Transformer) (err error) {
+	testFilePath := path.Join("testdata", "test"+suffix)
 	f, err := os.Open(testFilePath)
 	if err != nil {
 		return fmt.Errorf("open test file %s: %w", testFilePath, err)
@@ -67,7 +67,7 @@ func decompressorTest(file, suffix string, d writerhelper.Transformer) (err erro
 		return fmt.Errorf("decompress test file %s: %w", testFilePath, err)
 	}
 
-	checkFilePath := path.Join("testdata", file)
+	checkFilePath := path.Join("testdata", "test")
 	checkFile, err := os.Open(checkFilePath)
 	if err != nil {
 		return fmt.Errorf("open check file %s: %w", checkFilePath, err)
@@ -86,21 +86,21 @@ func decompressorTest(file, suffix string, d writerhelper.Transformer) (err erro
 }
 
 func TestZstd(t *testing.T) {
-	err := decompressorTest("test", ".zst", ZstdDecompressor)
+	err := decompressorTest(".zst", ZstdDecompressor)
 	require.NoError(t, err)
 }
 
 func TestXz(t *testing.T) {
-	err := decompressorTest("test", ".xz", XzDecompressor)
+	err := decompressorTest(".xz", XzDecompressor)
 	require.NoError(t, err)
 }
 
 func TestGzip(t *testing.T) {
-	err := decompressorTest("test", ".gz", GzipDecompressor)
+	err := decompressorTest(".gz", GzipDecompressor)
 	require.NoError(t, err)
 }
 
 func TestNull(t *testing.T) {
-	err := decompressorTest("test", "", NullDecompressor)
+	err := decompressorTest("", NullDecompressor)
 	require.NoError(t, err)
 }
