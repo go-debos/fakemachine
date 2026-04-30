@@ -754,14 +754,15 @@ func (m *Machine) cleanup() error {
 	return nil
 }
 
-func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr error) {
+func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err error) {
 	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create initrd file: %w", err)
 	}
+
 	defer func() {
-		if cerr := f.Close(); cerr != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close initrd file: %w", cerr)
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close initrd file: %w", closeErr))
 		}
 	}()
 
@@ -772,8 +773,8 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 
 	w := writerhelper.NewWriterHelper(f)
 	defer func() {
-		if cerr := w.Close(); cerr != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close cpio writer: %w", cerr)
+		if closeErr := w.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close cpio writer: %w", closeErr))
 		}
 	}()
 
