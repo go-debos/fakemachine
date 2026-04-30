@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/surma/gocpio"
+	cpio "github.com/surma/gocpio"
 )
 
 type WriterHelper struct {
@@ -54,7 +54,7 @@ func (w *WriterHelper) ensureBaseDirectory(directory string) error {
 			continue
 		}
 
-		err := w.WriteDirectory(collector, 0755)
+		err := w.WriteDirectory(collector, 0o755)
 		if err != nil {
 			return err
 		}

@@ -26,4 +26,5 @@ linters:
       - comments
 formatters:
   enable:
-    - gofmt
+    - gofumpt
+    - goimports
