@@ -724,7 +724,9 @@ func (m *Machine) setupscratch() error {
 		return fmt.Errorf("failed to create temp file for scratch: %w", err)
 	}
 	m.scratchfile = tmpfile.Name()
-	tmpfile.Close()
+	if err := tmpfile.Close(); err != nil {
+		return fmt.Errorf("failed to close scratch temp file: %w", err)
+	}
 
 	m.scratchdev, err = m.CreateImageWithLabel(m.scratchfile, m.scratchsize, "fake-scratch")
 	if err != nil {
