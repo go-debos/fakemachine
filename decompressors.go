@@ -2,6 +2,7 @@ package fakemachine
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 
@@ -38,12 +39,16 @@ func XzDecompressor(dst io.Writer, src io.Reader) error {
 	return nil
 }
 
-func GzipDecompressor(dst io.Writer, src io.Reader) error {
+func GzipDecompressor(dst io.Writer, src io.Reader) (err error) {
 	decompressor, err := gzip.NewReader(src)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip decompressor: %w", err)
 	}
-	defer decompressor.Close()
+	defer func() {
+		if closeErr := decompressor.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close gzip decompressor: %w", closeErr))
+		}
+	}()
 
 	_, err = io.Copy(dst, decompressor)
 	if err != nil {
