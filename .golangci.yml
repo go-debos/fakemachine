@@ -25,9 +25,6 @@ linters:
     - noctx
     - testifylint
     - unparam
-  exclusions:
-    presets:
-      - comments
 formatters:
   enable:
     - gofumpt

@@ -1,3 +1,4 @@
+// Package writerhelper provides helpers for writing cpio archives.
 package writerhelper
 
 import (
@@ -13,24 +14,30 @@ import (
 	cpio "github.com/surma/gocpio"
 )
 
+// WriterHelper wraps a cpio.Writer and tracks written paths to automatically
+// create parent directories as needed.
 type WriterHelper struct {
 	paths map[string]bool
 	*cpio.Writer
 }
 
+// WriteDirectory describes a directory entry to add to the archive.
 type WriteDirectory struct {
 	Directory string
 	Perm      os.FileMode
 }
 
+// WriteSymlink describes a symbolic link entry to add to the archive.
 type WriteSymlink struct {
 	Target string
 	Link   string
 	Perm   os.FileMode
 }
 
+// Transformer is a function that transforms data from src and writes it to dst.
 type Transformer func(dst io.Writer, src io.Reader) error
 
+// NewWriterHelper creates a WriterHelper that writes a cpio archive to f.
 func NewWriterHelper(f io.Writer) *WriterHelper {
 	return &WriterHelper{
 		paths:  map[string]bool{"/": true},
@@ -63,6 +70,7 @@ func (w *WriterHelper) ensureBaseDirectory(directory string) error {
 	return nil
 }
 
+// WriteDirectories writes multiple directory entries to the archive.
 func (w *WriterHelper) WriteDirectories(directories []WriteDirectory) error {
 	for _, d := range directories {
 		err := w.WriteDirectory(d.Directory, d.Perm)
@@ -73,6 +81,7 @@ func (w *WriterHelper) WriteDirectories(directories []WriteDirectory) error {
 	return nil
 }
 
+// WriteDirectory writes a single directory entry, creating parent directories as needed.
 func (w *WriterHelper) WriteDirectory(directory string, perm os.FileMode) error {
 	err := w.ensureBaseDirectory(path.Dir(directory))
 	if err != nil {
@@ -94,10 +103,12 @@ func (w *WriterHelper) WriteDirectory(directory string, perm os.FileMode) error 
 	return nil
 }
 
+// WriteFile writes a regular file with the given string content to the archive.
 func (w *WriterHelper) WriteFile(file, content string, perm os.FileMode) error {
 	return w.WriteFileRaw(file, []byte(content), perm)
 }
 
+// WriteFileRaw writes a regular file with the given byte content to the archive.
 func (w *WriterHelper) WriteFileRaw(file string, bytes []byte, perm os.FileMode) error {
 	err := w.ensureBaseDirectory(path.Dir(file))
 	if err != nil {
@@ -122,6 +133,7 @@ func (w *WriterHelper) WriteFileRaw(file string, bytes []byte, perm os.FileMode)
 	return nil
 }
 
+// WriteSymlinks writes multiple symbolic link entries to the archive.
 func (w *WriterHelper) WriteSymlinks(links []WriteSymlink) error {
 	for _, l := range links {
 		err := w.WriteSymlink(l.Target, l.Link, l.Perm)
@@ -132,6 +144,7 @@ func (w *WriterHelper) WriteSymlinks(links []WriteSymlink) error {
 	return nil
 }
 
+// WriteSymlink writes a single symbolic link entry to the archive.
 func (w *WriterHelper) WriteSymlink(target, link string, perm os.FileMode) error {
 	err := w.ensureBaseDirectory(path.Dir(link))
 	if err != nil {
@@ -159,6 +172,7 @@ func (w *WriterHelper) WriteSymlink(target, link string, perm os.FileMode) error
 	return nil
 }
 
+// WriteCharDevice writes a character device entry to the archive.
 func (w *WriterHelper) WriteCharDevice(device string, major, minor int64, perm os.FileMode) error {
 	err := w.ensureBaseDirectory(path.Dir(device))
 	if err != nil {
@@ -179,6 +193,7 @@ func (w *WriterHelper) WriteCharDevice(device string, major, minor int64, perm o
 	return nil
 }
 
+// CopyTree recursively copies a host directory tree into the archive.
 func (w *WriterHelper) CopyTree(path string) error {
 	walker := func(p string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -203,6 +218,7 @@ func (w *WriterHelper) CopyTree(path string) error {
 	return nil
 }
 
+// CopyFileTo copies a file from src on the host into the archive at dst.
 func (w *WriterHelper) CopyFileTo(src, dst string) (err error) {
 	if err := w.ensureBaseDirectory(path.Dir(dst)); err != nil {
 		return err
@@ -243,6 +259,7 @@ func (w *WriterHelper) CopyFileTo(src, dst string) (err error) {
 	return nil
 }
 
+// TransformFileTo reads src from the host, transforms it with fn, and writes the result into the archive at dst.
 func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) (err error) {
 	if err := w.ensureBaseDirectory(path.Dir(dst)); err != nil {
 		return err
@@ -288,6 +305,7 @@ func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) (err err
 	return nil
 }
 
+// CopyFile copies a file from the host into the archive at the same path.
 func (w *WriterHelper) CopyFile(in string) error {
 	return w.CopyFileTo(in, in)
 }
