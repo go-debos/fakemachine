@@ -25,6 +25,7 @@ linters:
     - noctx
     - testifylint
     - unparam
+    - nestif
 formatters:
   enable:
     - gofumpt

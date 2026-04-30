@@ -179,6 +179,26 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	m.SetEnviron(EnvironString) // And save the resulting environ vars on m
 }
 
+func applyMachineOptions(m *fakemachine.Machine, options Options) {
+	if options.ScratchSize != "" {
+		size, err := units.FromHumanSize(options.ScratchSize)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse scratch size: %v\n", err)
+			os.Exit(1)
+		}
+		m.SetScratch(size, "")
+	}
+	if options.Memory > 0 {
+		m.SetMemory(options.Memory)
+	}
+	if options.CPUs > 0 {
+		m.SetNumCPUs(options.CPUs)
+	}
+	if options.SectorSize > 0 {
+		m.SetSectorSize(options.SectorSize)
+	}
+}
+
 func main() {
 	// append the list of available backends to the commandline argument parser
 	opt := parser.FindOptionByLongName("backend")
@@ -214,29 +234,7 @@ func main() {
 	SetupVolumes(m, options)
 	SetupImages(m, options)
 	SetupEnviron(m, options)
-
-	if options.ScratchSize != "" {
-		size, err := units.FromHumanSize(options.ScratchSize)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse scratch size: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Use the current working directory as the default scratch file location
-		m.SetScratch(size, "")
-	}
-
-	if options.Memory > 0 {
-		m.SetMemory(options.Memory)
-	}
-
-	if options.CPUs > 0 {
-		m.SetNumCPUs(options.CPUs)
-	}
-
-	if options.SectorSize > 0 {
-		m.SetSectorSize(options.SectorSize)
-	}
+	applyMachineOptions(m, options)
 
 	command := "/bin/bash"
 	if len(args) > 0 {
