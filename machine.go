@@ -988,7 +988,9 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		}
 	}()
 
-	os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin")
+	if err := os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin"); err != nil {
+		return -1, fmt.Errorf("failed to set PATH: %w", err)
+	}
 
 	/* Sanity check mountpoints */
 	for _, v := range m.mounts {
