@@ -332,7 +332,9 @@ func (b kvmBackend) Supported() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to open /dev/kvm: %w", err)
 	}
-	kvmDevice.Close()
+	if err := kvmDevice.Close(); err != nil {
+		return false, fmt.Errorf("failed to close /dev/kvm: %w", err)
+	}
 
 	return b.qemuBackend.Supported()
 }
