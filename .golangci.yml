@@ -37,6 +37,7 @@ linters:
     - revive
     - staticcheck
     - testableexamples
+    - testifylint
     - tparallel
     - unconvert
     - unused
