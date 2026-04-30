@@ -741,12 +741,17 @@ func (m *Machine) setupscratch() error {
 	return nil
 }
 
-func (m *Machine) cleanup() {
-	if m.scratchfile != "" {
-		os.Remove(m.scratchfile)
+func (m *Machine) cleanup() error {
+	if m.scratchfile == "" {
+		return nil
+	}
+
+	if err := os.Remove(m.scratchfile); err != nil {
+		return fmt.Errorf("failed to remove scratchfile %q: %w", m.scratchfile, err)
 	}
 
 	m.scratchfile = ""
+	return nil
 }
 
 func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr error) {
