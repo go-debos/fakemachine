@@ -1047,8 +1047,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	}
 
 	success, err := m.backend.Start()
-	if !success || err != nil {
+	if err != nil {
 		return -1, fmt.Errorf("error starting %s backend: %w", m.backend.Name(), err)
+	}
+	if !success {
+		return -1, fmt.Errorf("error starting %s backend: unknown error", m.backend.Name())
 	}
 
 	result, err := os.Open(resultPath)
