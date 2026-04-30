@@ -5,6 +5,7 @@ package fakemachine
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -36,7 +37,7 @@ func mergedUsrSystem() (bool, error) {
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
 func getModData(modname string, fieldname string, kernelRelease string) ([]string, error) {
-	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
+	out, err := exec.CommandContext(context.Background(), "modinfo", "-k", kernelRelease, modname).Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to call modinfo for module %q and kernel release %q: %w", modname, kernelRelease, err)
 	}
@@ -745,7 +746,7 @@ func (m *Machine) setupscratch() error {
 	if err != nil {
 		return err
 	}
-	mkfs := exec.Command("mkfs.ext4", "-q", m.scratchfile)
+	mkfs := exec.CommandContext(context.Background(), "mkfs.ext4", "-q", m.scratchfile)
 	err = mkfs.Run()
 	if err != nil {
 		return fmt.Errorf("failed to format scratch disk: %w", err)

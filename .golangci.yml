@@ -22,6 +22,7 @@ linters:
     - predeclared
     - gocritic
     - prealloc
+    - noctx
   exclusions:
     presets:
       - comments
