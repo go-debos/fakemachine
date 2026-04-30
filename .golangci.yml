@@ -17,6 +17,7 @@ linters:
     - forcetypeassert
     - gocheckcompilerdirectives
     - gocritic
+    - godoclint
     - godox
     - goprintffuncname
     - govet
@@ -47,9 +48,6 @@ linters:
     - wastedassign
     - whitespace
     - wrapcheck
-  exclusions:
-    presets:
-      - comments
 formatters:
   enable:
     - gofumpt

@@ -1,3 +1,6 @@
+// Command fakemachine runs a command, or an interactive shell, inside a
+// fakemachine, exposing the requested host volumes, disk images and
+// environment variables to it.
 package main
 
 import (

@@ -10,6 +10,8 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+// ZstdDecompressor is a cpio Transformer that writes the zstd-decompressed
+// content of src to dst.
 func ZstdDecompressor(dst io.Writer, src io.Reader) error {
 	decompressor, err := zstd.NewReader(src)
 	if err != nil {
@@ -24,6 +26,8 @@ func ZstdDecompressor(dst io.Writer, src io.Reader) error {
 	return nil
 }
 
+// XzDecompressor is a cpio Transformer that writes the xz-decompressed
+// content of src to dst.
 func XzDecompressor(dst io.Writer, src io.Reader) error {
 	decompressor, err := xz.NewReader(src)
 	if err != nil {
@@ -39,6 +43,8 @@ func XzDecompressor(dst io.Writer, src io.Reader) error {
 	return nil
 }
 
+// GzipDecompressor is a cpio Transformer that writes the gzip-decompressed
+// content of src to dst.
 func GzipDecompressor(dst io.Writer, src io.Reader) (err error) {
 	decompressor, err := gzip.NewReader(src)
 	if err != nil {
@@ -57,6 +63,8 @@ func GzipDecompressor(dst io.Writer, src io.Reader) (err error) {
 	return nil
 }
 
+// NullDecompressor is a cpio Transformer for uncompressed files; it copies
+// src to dst unchanged.
 func NullDecompressor(dst io.Writer, src io.Reader) error {
 	_, err := io.Copy(dst, src)
 	if err != nil {
