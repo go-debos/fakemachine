@@ -22,7 +22,7 @@ func init() {
 
 func CreateMachine(t *testing.T) *Machine {
 	machine, err := NewMachineWithBackend(backendName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	machine.SetNumCPUs(2)
 
 	return machine
@@ -32,21 +32,18 @@ func TestSuccessfulCommand(t *testing.T) {
 	t.Parallel()
 	m := CreateMachine(t)
 
-	exitcode, _ := m.Run("ls /")
-
-	if exitcode != 0 {
-		t.Fatalf("Expected 0 but got %d", exitcode)
-	}
+	exitcode, err := m.Run("ls /")
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestCommandNotFound(t *testing.T) {
 	t.Parallel()
 	m := CreateMachine(t)
-	exitcode, _ := m.Run("/a/b/c /")
 
-	if exitcode != 127 {
-		t.Fatalf("Expected 127 but got %d", exitcode)
-	}
+	exitcode, err := m.Run("/a/b/c /")
+	require.NoError(t, err)
+	require.Equal(t, 127, exitcode)
 }
 
 func TestImage(t *testing.T) {
@@ -54,54 +51,49 @@ func TestImage(t *testing.T) {
 	m := CreateMachine(t)
 
 	_, err := m.CreateImage("test.img", 1024*1024)
-	require.Nil(t, err)
-	exitcode, _ := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
-
-	if exitcode != 0 {
-		t.Fatalf("Test for the virtual image device failed with %d", exitcode)
-	}
-}
-
-func AssertDevSectorSize(t *testing.T, device string, sectorsize int) {
-	bstypes := []string{"physical", "logical"}
-	for _, bstype := range bstypes {
-		path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
-		f, err := os.Open(path)
-		require.Nil(t, err)
-		defer f.Close()
-
-		blkdev := bufio.NewReader(f)
-		line, err := blkdev.ReadString('\n')
-		require.Nil(t, err)
-
-		line = strings.TrimSuffix(line, "\n")
-		sz, err := strconv.Atoi(line)
-		require.Nil(t, err)
-
-		require.Equal(t, sectorsize, sz)
-	}
+	require.NoError(t, err)
+	exitcode, err := m.Run("test -b /dev/disk/by-fakemachine-label/fakedisk-0")
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func AssertSectorSize(t *testing.T, sectorsize int) {
-	if !InMachine() {
-		t.Parallel()
-		m := CreateMachine(t)
-		m.SetSectorSize(sectorsize)
-		_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
-		require.Nil(t, err)
-		switch sectorsize {
-		case 512:
-			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage512SectorSize", backendName})
-			require.Equal(t, exitcode, 0)
-		case 4096:
-			exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImage4kSectorSize", backendName})
-			require.Equal(t, exitcode, 0)
-		default:
-			t.Fatalf("Unhandled sector size %d", sectorsize)
+	t.Helper()
+	t.Parallel()
+	if InMachine() {
+		for _, bstype := range []string{"physical", "logical"} {
+			device := "vda"
+			path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
+
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+
+			sz, err := strconv.Atoi(strings.TrimSpace(string(data)))
+			require.NoError(t, err)
+
+			require.Equal(t, sectorsize, sz)
 		}
-	} else {
-		AssertDevSectorSize(t, "vda", sectorsize)
+		return
 	}
+
+	m := CreateMachine(t)
+	m.SetSectorSize(sectorsize)
+	_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
+	require.NoError(t, err)
+
+	testName := ""
+	switch sectorsize {
+	case 512:
+		testName = "TestImage512SectorSize"
+	case 4096:
+		testName = "TestImage4kSectorSize"
+	default:
+		t.Fatalf("Unhandled sector size %d", sectorsize)
+	}
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", testName, backendName})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestImage512SectorSize(t *testing.T) {
@@ -114,7 +106,7 @@ func TestImage4kSectorSize(t *testing.T) {
 
 func AssertMount(t *testing.T, mountpoint, fstype string) {
 	m, err := os.Open("/proc/self/mounts")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	mtab := bufio.NewReader(m)
 
@@ -124,11 +116,11 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 			require.Fail(t, "mountpoint not found")
 			break
 		}
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		fields := strings.Fields(line)
 		if fields[1] == mountpoint {
-			require.Equal(t, fields[2], fstype)
+			require.Equal(t, fstype, fields[2])
 			return
 		}
 	}
@@ -143,11 +135,9 @@ func TestScratchTmp(t *testing.T) {
 
 	m := CreateMachine(t)
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchTmp"})
-
-	if exitcode != 0 {
-		t.Fatalf("Test for tmpfs mount on scratch failed with %d", exitcode)
-	}
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchTmp"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestScratchDisk(t *testing.T) {
@@ -160,11 +150,9 @@ func TestScratchDisk(t *testing.T) {
 	m := CreateMachine(t)
 	m.SetScratch(1024*1024*1024, "")
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
-
-	if exitcode != 0 {
-		t.Fatalf("Test for device mount on scratch failed with %d", exitcode)
-	}
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestMemory(t *testing.T) {
@@ -182,11 +170,9 @@ if [ ${MEM} -lt 900000 -o ${MEM} -gt 1024000 ] ; then
   exit 1
 fi
 `
-	exitcode, _ := m.Run(command)
-
-	if exitcode != 0 {
-		t.Fatalf("Test for set memory failed with %d", exitcode)
-	}
+	exitcode, err := m.Run(command)
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestSpawnMachine(t *testing.T) {
@@ -198,11 +184,9 @@ func TestSpawnMachine(t *testing.T) {
 
 	m := CreateMachine(t)
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestSpawnMachine"})
-
-	if exitcode != 0 {
-		t.Fatalf("Test for respawning in the machine failed failed with %d", exitcode)
-	}
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestSpawnMachine"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestImageLabel(t *testing.T) {
@@ -210,33 +194,32 @@ func TestImageLabel(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
-		require.Equal(t, len(devices), 2, "Only expected two devices")
+		require.Equal(t, 2, len(devices), "Only expected two devices")
 
 		autolabel := devices[0]
 		labeled := devices[1]
 
 		info, err := os.Stat(autolabel)
-		require.Nil(t, err)
-		require.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		require.NoError(t, err)
+		require.Equal(t, os.ModeDevice, info.Mode()&os.ModeType, "Expected a device")
 
 		info, err = os.Stat(labeled)
-		require.Nil(t, err)
-		require.Equal(t, info.Mode()&os.ModeType, os.ModeDevice, "Expected a device")
+		require.NoError(t, err)
+		require.Equal(t, os.ModeDevice, info.Mode()&os.ModeType, "Expected a device")
 
 		return
 	}
 
 	m := CreateMachine(t)
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	labeled, err := m.CreateImageWithLabel("test-labeled.img", 1024*1024, "test-labeled")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	exitcode, _ := m.RunInMachineWithArgs([]string{"-test.run", "TestImageLabel", autolabel, labeled})
-	if exitcode != 0 {
-		t.Fatalf("Test for images in the machine failed failed with %d", exitcode)
-	}
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestImageLabel", autolabel, labeled})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
 
 func TestVolumes(t *testing.T) {
@@ -251,7 +234,7 @@ func TestVolumes(t *testing.T) {
 	m.AddVolume("random_directory_never_exists")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
-	require.Equal(t, exitcode, -1)
+	require.Equal(t, -1, exitcode)
 	require.Error(t, err)
 
 	/* Try to mount a device file into the machine */
@@ -259,7 +242,7 @@ func TestVolumes(t *testing.T) {
 	m.AddVolume("/dev/zero")
 
 	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
-	require.Equal(t, exitcode, -1)
+	require.Equal(t, -1, exitcode)
 	require.Error(t, err)
 
 	/* Try to mount a volume with whitespace into the machine */
@@ -267,7 +250,7 @@ func TestVolumes(t *testing.T) {
 	m.AddVolumeAt("/dev", "/dev ices")
 
 	exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "TestVolumes"})
-	require.Equal(t, exitcode, -1)
+	require.Equal(t, -1, exitcode)
 	require.Error(t, err)
 }
 
@@ -281,9 +264,7 @@ func TestDiskSuffix(t *testing.T) {
 		{52, "ba"}, {701, "zz"}, {702, "aaa"},
 	}
 	for _, c := range cases {
-		if got := diskSuffix(c.i); got != c.want {
-			t.Errorf("diskSuffix(%d) = %q, want %q", c.i, got, c.want)
-		}
+		require.Equal(t, c.want, diskSuffix(c.i), "diskSuffix(%d)", c.i)
 	}
 }
 
@@ -301,17 +282,15 @@ func TestCommandEscaping(t *testing.T) {
 	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
-		require.Equal(t, testArg, "$s'n\\akes")
+		require.Equal(t, "$s'n\\akes", testArg)
 		t.Log(testArg)
 		return
 	}
 
 	m := CreateMachine(t)
-	exitcode, _ := m.RunInMachineWithArgs([]string{
+	exitcode, err := m.RunInMachineWithArgs([]string{
 		"-test.v", "-test.run",
 		"TestCommandEscaping", "-testarg", "$s'n\\akes"})
-
-	if exitcode != 0 {
-		t.Fatalf("Expected 0 but got %d", exitcode)
-	}
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }

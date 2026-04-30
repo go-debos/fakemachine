@@ -4,6 +4,7 @@ package fakemachine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -82,22 +83,30 @@ func (b qemuBackend) KernelRelease() (string, error) {
 	if err := unix.Uname(&u); err != nil {
 		return "", fmt.Errorf("failed to get kernel release: %w", err)
 	}
-	release := string(u.Release[:bytes.IndexByte(u.Release[:], 0)])
 
-	if _, err := os.Stat(path.Join("/lib/modules", release)); err == nil {
+	n := bytes.IndexByte(u.Release[:], 0)
+	if n < 0 {
+		n = len(u.Release)
+	}
+	release := string(u.Release[:n])
+
+	moduleDir := path.Join("/lib/modules", release)
+	if _, err := os.Stat(moduleDir); err == nil {
 		return release, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("checking module directory %s: %w", moduleDir, err)
 	}
 
 	files, err := os.ReadDir("/lib/modules")
 	if err != nil {
-		return "", fmt.Errorf("failed to read /lib/modules: %w", err)
+		return "", fmt.Errorf("listing /lib/modules: %w", err)
 	}
 
 	for i := len(files) - 1; i >= 0; i-- {
 		/* Ensure the kernel name starts with a digit, in order
 		 * to filter out 'extramodules-ARCH' on ArchLinux */
 		filename := files[i].Name()
-		if filename[0] >= '0' && filename[0] <= '9' {
+		if len(filename) > 0 && filename[0] >= '0' && filename[0] <= '9' {
 			return filename, nil
 		}
 	}
@@ -112,9 +121,17 @@ func (b qemuBackend) KernelPath() (string, error) {
 	 * ... perhaps because systemd requires it to allow hibernation
 	 * https://github.com/systemd/systemd/commit/edda44605f06a41fb86b7ab8128dcf99161d2344
 	 */
-	if moddir, err := b.ModulePath(); err == nil {
+	moddir, err := b.ModulePath()
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("failed to get kernel module path: %w", err)
+	}
+	if err == nil {
 		kernelPath := path.Join(moddir, "vmlinuz")
-		if _, err := os.Stat(kernelPath); err == nil {
+		if _, err := os.Stat(kernelPath); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return "", fmt.Errorf("failed to stat kernel path %s: %w", kernelPath, err)
+			}
+		} else {
 			return kernelPath, nil
 		}
 	}
@@ -125,9 +142,13 @@ func (b qemuBackend) KernelPath() (string, error) {
 		return "", err
 	}
 
-	kernelPath := "/boot/vmlinuz-" + kernelRelease
+	kernelPath := path.Join("/boot", "vmlinuz-"+kernelRelease)
 	if _, err := os.Stat(kernelPath); err != nil {
-		return "", fmt.Errorf("kernel not found at %s: %w", kernelPath, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("kernel not found at %s", kernelPath)
+		}
+
+		return "", fmt.Errorf("failed to stat kernel path %s: %w", kernelPath, err)
 	}
 
 	return kernelPath, nil
@@ -140,13 +161,16 @@ func (b qemuBackend) ModulePath() (string, error) {
 	}
 
 	moddir := "/lib/modules"
-	if mergedUsrSystem() {
+	if b.machine.mergedUsr {
 		moddir = "/usr/lib/modules"
 	}
 
 	moddir = path.Join(moddir, kernelRelease)
 	if _, err := os.Stat(moddir); err != nil {
-		return "", fmt.Errorf("module directory not found at %s: %w", moddir, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("module directory not found at %s: %w", moddir, err)
+		}
+		return "", fmt.Errorf("stat %s: %w", moddir, err)
 	}
 
 	return moddir, nil
@@ -308,7 +332,9 @@ func (b kvmBackend) Supported() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to open /dev/kvm: %w", err)
 	}
-	kvmDevice.Close()
+	if err := kvmDevice.Close(); err != nil {
+		return false, fmt.Errorf("failed to close /dev/kvm: %w", err)
+	}
 
 	return b.qemuBackend.Supported()
 }

@@ -22,19 +22,22 @@ import (
 	writerhelper "github.com/go-debos/fakemachine/cpio"
 )
 
-func mergedUsrSystem() bool {
-	f, _ := os.Lstat("/bin")
+func mergedUsrSystem() (bool, error) {
+	f, err := os.Lstat("/bin")
+	if err != nil {
+		return false, fmt.Errorf("failed to stat '/bin': %w", err)
+	}
 
-	return (f.Mode() & os.ModeSymlink) == os.ModeSymlink
+	return (f.Mode() & os.ModeSymlink) == os.ModeSymlink, nil
 }
 
 // Parse modinfo output and return the value of module attributes
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
-func getModData(modname string, fieldname string, kernelRelease string) []string {
+func getModData(modname string, fieldname string, kernelRelease string) ([]string, error) {
 	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to call modinfo for module %q and kernel release %q: %w", modname, kernelRelease, err)
 	}
 
 	var fieldValue []string
@@ -46,21 +49,28 @@ func getModData(modname string, fieldname string, kernelRelease string) []string
 			fieldValue = append(fieldValue, strings.TrimSpace(field[1]))
 		}
 	}
-	return fieldValue
+	return fieldValue, nil
 }
 
 // Get full path of module
-func getModPath(modname string, kernelRelease string) string {
-	path := getModData(modname, "filename", kernelRelease)
-	if len(path) != 0 {
-		return path[0]
+func getModPath(modname string, kernelRelease string) (string, error) {
+	path, err := getModData(modname, "filename", kernelRelease)
+	if err != nil {
+		return "", err
 	}
-	return ""
+	if len(path) == 0 {
+		return "", fmt.Errorf("could not find path for module %q", modname)
+	}
+
+	return path[0], nil
 }
 
 // Get all dependent module
-func getModDepends(modname string, kernelRelease string) []string {
-	deplist := getModData(modname, "depends", kernelRelease)
+func getModDepends(modname string, kernelRelease string) ([]string, error) {
+	deplist, err := getModData(modname, "depends", kernelRelease)
+	if err != nil {
+		return nil, err
+	}
 	var modlist []string
 	for _, v := range deplist {
 		if v != "" {
@@ -73,12 +83,16 @@ func getModDepends(modname string, kernelRelease string) []string {
 	// https://github.com/mirror/busybox/blob/1dd2685dcc735496d7adde87ac60b9434ed4a04c/modutils/modprobe.c#L46-L49
 	var sublist []string
 	for _, mod := range modlist {
-		sublist = append(sublist, getModDepends(mod, kernelRelease)...)
+		deps, err := getModDepends(mod, kernelRelease)
+		if err != nil {
+			return nil, fmt.Errorf("get dependencies for module %q: %w", mod, err)
+		}
+		sublist = append(sublist, deps...)
 	}
 
 	modlist = append(modlist, sublist...)
 
-	return modlist
+	return modlist, nil
 }
 
 var suffixes = map[string]writerhelper.Transformer{
@@ -89,10 +103,13 @@ var suffixes = map[string]writerhelper.Transformer{
 }
 
 func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
-	release, _ := m.backend.KernelRelease()
-	modpath := getModPath(modname, release)
-	if modpath == "" {
-		return fmt.Errorf("kernel module '%s' not found for kernel release '%s'", modname, release)
+	release, err := m.backend.KernelRelease()
+	if err != nil {
+		return fmt.Errorf("failed to get kernel release: %w", err)
+	}
+	modpath, err := getModPath(modname, release)
+	if err != nil {
+		return fmt.Errorf("kernel module %q not found for kernel release %q: %w", modname, release, err)
 	}
 
 	if modpath == "(builtin)" || copiedModules[modname] {
@@ -103,7 +120,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 	for suffix, fn := range suffixes {
 		if strings.HasSuffix(modpath, suffix) {
 			if _, err := os.Stat(modpath); err != nil {
-				return fmt.Errorf("failed to stat module file %s: %w", modpath, err)
+				return fmt.Errorf("failed to stat module file %q: %w", modpath, err)
 			}
 
 			// The suffix is the complete thing - ".ko.foobar"
@@ -112,12 +129,12 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 
 			// Ensure destination has /usr prefix if running
 			// on merged-usr system.
-			if mergedUsrSystem() && !strings.HasPrefix(dest, "/usr") {
+			if m.mergedUsr && !strings.HasPrefix(dest, "/usr") {
 				dest = "/usr" + dest
 			}
 
 			if err := w.TransformFileTo(modpath, dest, fn); err != nil {
-				return fmt.Errorf("failed to transform module file %s: %w", modpath, err)
+				return fmt.Errorf("failed to transform module file %q: %w", modpath, err)
 			}
 			found = true
 			break
@@ -129,7 +146,10 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 
 	copiedModules[modname] = true
 
-	deplist := getModDepends(modname, release)
+	deplist, err := getModDepends(modname, release)
+	if err != nil {
+		return fmt.Errorf("failed to get dependencies for kernel module %q: %w", modname, err)
+	}
 	for _, mod := range deplist {
 		if err := m.copyModules(w, mod, copiedModules); err != nil {
 			return err
@@ -151,6 +171,45 @@ func realDir(path string) (string, error) {
 		return "", fmt.Errorf("failed to evaluate symlinks for %s: %w", p, err)
 	}
 	return filepath.Dir(p), nil
+}
+
+// addVolumeIfExists adds volumePath as a machine volume if it exists on the host.
+//
+// It returns true if the volume was added. A missing path is not treated as an
+// error and returns false, nil. If the path exists but is not a directory, or
+// cannot be checked, it returns false and an error.
+func (m *Machine) addVolumeIfExists(volumePath string) (bool, error) {
+	stat, err := os.Stat(volumePath)
+
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to check %q: %w", volumePath, err)
+	}
+
+	if !stat.IsDir() {
+		return false, fmt.Errorf("failed to add volume %q: not a directory", volumePath)
+	}
+
+	m.AddVolume(volumePath)
+	return true, nil
+}
+
+func (m *Machine) addVolumesWithGlob(pattern string) error {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("glob %s: %w", pattern, err)
+	}
+
+	for _, volumePath := range matches {
+		if _, err := m.addVolumeIfExists(volumePath); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type Arch string
@@ -193,6 +252,7 @@ type Machine struct {
 	sectorSize int
 	showBoot   bool
 	quiet      bool
+	mergedUsr  bool
 	Environ    []string
 
 	scratchsize int64
@@ -225,41 +285,44 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	// usr is mounted by specific label via /init
 	m.addStaticVolume("/usr", "usr")
 
-	if !mergedUsrSystem() {
+	// check if the host is a merged-usr system
+	m.mergedUsr, err = mergedUsrSystem()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if the host is a merged-usr system: %w", err)
+	}
+
+	if !m.mergedUsr {
 		m.addStaticVolume("/sbin", "sbin")
 		m.addStaticVolume("/bin", "bin")
 		m.addStaticVolume("/lib", "lib")
 	}
 
 	// Mounts for ssl certificates
-	if _, err := os.Stat("/etc/ca-certificates"); err == nil {
-		m.AddVolume("/etc/ca-certificates")
+	if _, err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
+		return nil, err
 	}
-	if _, err := os.Stat("/etc/ssl"); err == nil {
-		m.AddVolume("/etc/ssl")
+	if _, err := m.addVolumeIfExists("/etc/ssl"); err != nil {
+		return nil, err
 	}
 
 	// Mounts for java VM configuration, especially security policies
-	matches, _ := filepath.Glob("/etc/java*")
-	for _, path := range matches {
-		stat, err := os.Stat(path)
-		if err == nil && stat.IsDir() {
-			m.AddVolume(path)
-		}
+	if err := m.addVolumesWithGlob("/etc/java*"); err != nil {
+		return nil, err
 	}
 
 	// Dbus configuration
-	if _, err := os.Stat("/etc/dbus-1"); err == nil {
-		m.AddVolume("/etc/dbus-1")
+	if _, err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
+		return nil, err
 	}
 
 	// Debian alternative symlinks
-	if _, err := os.Stat("/etc/alternatives"); err == nil {
-		m.AddVolume("/etc/alternatives")
+	if _, err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
+		return nil, err
 	}
-	// Debians binfmt registry
-	if _, err := os.Stat("/var/lib/binfmts"); err == nil {
-		m.AddVolume("/var/lib/binfmts")
+
+	// Debian binfmt registry
+	if _, err := m.addVolumeIfExists("/var/lib/binfmts"); err != nil {
+		return nil, err
 	}
 
 	return m, nil
@@ -438,8 +501,7 @@ func (m *Machine) AddVolume(directory string) {
 //
 // The returned string is the device path of the new image as seen inside
 // fakemachine.
-func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (string,
-	error) {
+func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_ string, err error) {
 	if size < 0 {
 		_, err := os.Stat(path)
 		if err != nil {
@@ -448,12 +510,12 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 	}
 
 	if len(label) >= 20 {
-		return "", fmt.Errorf("label '%s' too long; cannot be more then 20 characters", label)
+		return "", fmt.Errorf("image label %q too long; cannot be more than 20 characters", label)
 	}
 
 	for _, image := range m.images {
 		if image.label == label {
-			return "", fmt.Errorf("label '%s' already exists", label)
+			return "", fmt.Errorf("image with label %q already exists", label)
 		}
 	}
 
@@ -461,16 +523,18 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to create image file %s: %w", path, err)
 	}
+	defer func() {
+		if closeErr := i.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close image file %s: %w", path, closeErr))
+		}
+	}()
 
 	if size >= 0 {
-		err = i.Truncate(size)
-		if err != nil {
-			i.Close()
-			return "", fmt.Errorf("failed to truncate image file: %w", err)
+		if err := i.Truncate(size); err != nil {
+			return "", fmt.Errorf("failed to truncate image file %s: %w", path, err)
 		}
 	}
 
-	i.Close()
 	m.images = append(m.images, image{path, label})
 
 	return fmt.Sprintf("/dev/disk/by-fakemachine-label/%s", label), nil
@@ -529,11 +593,7 @@ func (m *Machine) SetQuiet(quiet bool) {
 // Path is "" then the working directory is used as a default storage location
 func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchsize = scratchsize
-	if path == "" {
-		m.scratchpath, _ = os.Getwd()
-	} else {
-		m.scratchpath = path
-	}
+	m.scratchpath = path
 }
 
 func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
@@ -563,10 +623,10 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 
 func stripCompressionSuffix(module string) (string, error) {
 	for suffix := range suffixes {
-		if strings.HasSuffix(module, suffix) {
-			// The suffix is the complete thing - ".ko.foobar"
-			// Reinstate the required ".ko" part, after trimming.
-			return strings.TrimSuffix(module, suffix) + ".ko", nil
+		// The suffix is the complete thing - ".ko.foobar"
+		// Reinstate the required ".ko" part, after trimming.
+		if trimmed, ok := strings.CutSuffix(module, suffix); ok {
+			return trimmed + ".ko", nil
 		}
 	}
 	return "", errors.New("module extension/suffix unknown")
@@ -574,14 +634,34 @@ func stripCompressionSuffix(module string) (string, error) {
 
 func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) error {
 	output := make([]string, len(modules))
-	release, _ := m.backend.KernelRelease()
+	release, err := m.backend.KernelRelease()
+	if err != nil {
+		return fmt.Errorf("failed to get kernel release: %w", err)
+	}
 	i := 0
 	for mod := range modules {
-		modpath, _ := stripCompressionSuffix(getModPath(mod, release)) // CANNOT fail
-		deplist := getModDepends(mod, release)                         // CANNOT fail
+		modpath, err := getModPath(mod, release)
+		if err != nil {
+			return fmt.Errorf("failed to get path for module %q: %w", mod, err)
+		}
+		modpath, err = stripCompressionSuffix(modpath)
+		if err != nil {
+			return fmt.Errorf("failed to strip compression suffix for module %q: %w", mod, err)
+		}
+		deplist, err := getModDepends(mod, release)
+		if err != nil {
+			return fmt.Errorf("failed to get dependencies for module %q: %w", mod, err)
+		}
 		deps := make([]string, len(deplist))
 		for j, dep := range deplist {
-			deppath, _ := stripCompressionSuffix(getModPath(dep, release)) // CANNOT fail
+			deppath, err := getModPath(dep, release)
+			if err != nil {
+				return fmt.Errorf("failed to get path for dependency %q of module %q: %w", dep, mod, err)
+			}
+			deppath, err = stripCompressionSuffix(deppath)
+			if err != nil {
+				return fmt.Errorf("failed to strip compression suffix for dependency %q of module %q: %w", dep, mod, err)
+			}
 			deps[j] = deppath
 		}
 		output[i] = fmt.Sprintf("%s: %s", modpath, strings.Join(deps, " "))
@@ -589,8 +669,7 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	}
 
 	path := path.Join(moddir, "modules.dep")
-	err := w.WriteFile(path, strings.Join(output, "\n"), 0644)
-	if err != nil {
+	if err := w.WriteFile(path, strings.Join(output, "\n"), 0644); err != nil {
 		return fmt.Errorf("failed to write modules.dep: %w", err)
 	}
 	return nil
@@ -632,12 +711,22 @@ func (m *Machine) setupscratch() error {
 		return nil
 	}
 
+	if m.scratchpath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory for scratch path: %w", err)
+		}
+		m.scratchpath = cwd
+	}
+
 	tmpfile, err := os.CreateTemp(m.scratchpath, "fake-scratch.img.")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for scratch: %w", err)
 	}
 	m.scratchfile = tmpfile.Name()
-	tmpfile.Close()
+	if err := tmpfile.Close(); err != nil {
+		return fmt.Errorf("failed to close scratch temp file: %w", err)
+	}
 
 	m.scratchdev, err = m.CreateImageWithLabel(m.scratchfile, m.scratchsize, "fake-scratch")
 	if err != nil {
@@ -652,22 +741,28 @@ func (m *Machine) setupscratch() error {
 	return nil
 }
 
-func (m *Machine) cleanup() {
-	if m.scratchfile != "" {
-		os.Remove(m.scratchfile)
+func (m *Machine) cleanup() error {
+	if m.scratchfile == "" {
+		return nil
+	}
+
+	if err := os.Remove(m.scratchfile); err != nil {
+		return fmt.Errorf("failed to remove scratchfile %q: %w", m.scratchfile, err)
 	}
 
 	m.scratchfile = ""
+	return nil
 }
 
-func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr error) {
+func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err error) {
 	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create initrd file: %w", err)
 	}
+
 	defer func() {
-		if cerr := f.Close(); cerr != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close initrd file: %w", cerr)
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close initrd file: %w", closeErr))
 		}
 	}()
 
@@ -678,8 +773,8 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 
 	w := writerhelper.NewWriterHelper(f)
 	defer func() {
-		if cerr := w.Close(); cerr != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close cpio writer: %w", cerr)
+		if closeErr := w.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close cpio writer: %w", closeErr))
 		}
 	}()
 
@@ -704,7 +799,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 		return fmt.Errorf("failed to write /var/run symlink: %w", err)
 	}
 
-	if mergedUsrSystem() {
+	if m.mergedUsr {
 		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
 			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
 			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
@@ -726,7 +821,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 	}
 
 	prefix := ""
-	if mergedUsrSystem() {
+	if m.mergedUsr {
 		prefix = "/usr"
 	}
 
@@ -886,16 +981,25 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (retErr 
 
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples
-func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
-	defer m.cleanup()
+func (m *Machine) startup(command string, extracontent [][2]string) (code int, err error) {
+	defer func() {
+		if cleanupErr := m.cleanup(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("cleanup failed: %w", cleanupErr))
+		}
+	}()
 
-	os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin")
+	if err := os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin"); err != nil {
+		return -1, fmt.Errorf("failed to set PATH: %w", err)
+	}
 
 	/* Sanity check mountpoints */
 	for _, v := range m.mounts {
 		/* Check the directory exists on the host */
 		stat, err := os.Stat(v.hostDirectory)
-		if err != nil || !stat.IsDir() {
+		if err != nil {
+			return -1, fmt.Errorf("couldn't stat %s: %w", v.hostDirectory, err)
+		}
+		if !stat.IsDir() {
 			return -1, fmt.Errorf("couldn't mount %s inside machine: expected a directory", v.hostDirectory)
 		}
 
@@ -915,7 +1019,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 		return -1, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
-	defer os.RemoveAll(tmpdir)
+	defer func() {
+		if removeErr := os.RemoveAll(tmpdir); removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to remove tempdir %s: %w", tmpdir, removeErr))
+		}
+	}()
 
 	err = m.setupscratch()
 	if err != nil {
@@ -939,15 +1047,22 @@ func (m *Machine) startup(command string, extracontent [][2]string) (int, error)
 	}
 
 	success, err := m.backend.Start()
-	if !success || err != nil {
+	if err != nil {
 		return -1, fmt.Errorf("error starting %s backend: %w", m.backend.Name(), err)
+	}
+	if !success {
+		return -1, fmt.Errorf("error starting %s backend: unknown error", m.backend.Name())
 	}
 
 	result, err := os.Open(resultPath)
 	if err != nil {
 		return -1, fmt.Errorf("failed to open result file: %w", err)
 	}
-	defer result.Close()
+	defer func() {
+		if closeErr := result.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close result file: %w", closeErr))
+		}
+	}()
 
 	exitstr, err := io.ReadAll(result)
 	if err != nil {
