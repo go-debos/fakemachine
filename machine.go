@@ -1019,7 +1019,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		return -1, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
-	defer os.RemoveAll(tmpdir)
+	defer func() {
+		if removeErr := os.RemoveAll(tmpdir); removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to remove tempdir %s: %w", tmpdir, removeErr))
+		}
+	}()
 
 	err = m.setupscratch()
 	if err != nil {
