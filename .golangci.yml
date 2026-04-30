@@ -30,6 +30,7 @@ linters:
     - nilerr
     - nilnesserr
     - nilnil
+    - noctx
     - nolintlint
     - predeclared
     - reassign
