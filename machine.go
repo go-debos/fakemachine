@@ -501,8 +501,7 @@ func (m *Machine) AddVolume(directory string) {
 //
 // The returned string is the device path of the new image as seen inside
 // fakemachine.
-func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (string,
-	error) {
+func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_ string, err error) {
 	if size < 0 {
 		_, err := os.Stat(path)
 		if err != nil {
@@ -524,16 +523,18 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to create image file %s: %w", path, err)
 	}
+	defer func() {
+		if closeErr := i.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close image file %s: %w", path, closeErr))
+		}
+	}()
 
 	if size >= 0 {
-		err = i.Truncate(size)
-		if err != nil {
-			i.Close()
-			return "", fmt.Errorf("failed to truncate image file: %w", err)
+		if err := i.Truncate(size); err != nil {
+			return "", fmt.Errorf("failed to truncate image file %s: %w", path, err)
 		}
 	}
 
-	i.Close()
 	m.images = append(m.images, image{path, label})
 
 	return fmt.Sprintf("/dev/disk/by-fakemachine-label/%s", label), nil
