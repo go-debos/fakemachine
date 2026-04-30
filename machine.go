@@ -996,7 +996,10 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	for _, v := range m.mounts {
 		/* Check the directory exists on the host */
 		stat, err := os.Stat(v.hostDirectory)
-		if err != nil || !stat.IsDir() {
+		if err != nil {
+			return -1, fmt.Errorf("couldn't stat %s: %w", v.hostDirectory, err)
+		}
+		if !stat.IsDir() {
 			return -1, fmt.Errorf("couldn't mount %s inside machine: expected a directory", v.hostDirectory)
 		}
 
