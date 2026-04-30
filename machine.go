@@ -36,6 +36,7 @@ func mergedUsrSystem() (bool, error) {
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
 func getModData(modname string, fieldname string, kernelRelease string) ([]string, error) {
+	//nolint:noctx // Synchronous operation with no caller context.
 	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to call modinfo for module %q and kernel release %q: %w", modname, kernelRelease, err)
@@ -745,6 +746,8 @@ func (m *Machine) setupscratch() error {
 	if err != nil {
 		return err
 	}
+
+	//nolint:noctx // Synchronous operation with no caller context.
 	mkfs := exec.Command("mkfs.ext4", "-q", m.scratchfile)
 	err = mkfs.Run()
 	if err != nil {
