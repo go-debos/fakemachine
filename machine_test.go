@@ -13,8 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var backendName string
-var testArg string
+var (
+	backendName string
+	testArg     string
+)
 
 func init() {
 	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
@@ -253,9 +255,15 @@ func TestDiskSuffix(t *testing.T) {
 		i    int
 		want string
 	}{
-		{0, "a"}, {1, "b"}, {25, "z"},
-		{26, "aa"}, {27, "ab"}, {51, "az"},
-		{52, "ba"}, {701, "zz"}, {702, "aaa"},
+		{0, "a"},
+		{1, "b"},
+		{25, "z"},
+		{26, "aa"},
+		{27, "ab"},
+		{51, "az"},
+		{52, "ba"},
+		{701, "zz"},
+		{702, "aaa"},
 	}
 	for _, c := range cases {
 		require.Equal(t, c.want, diskSuffix(c.i), "diskSuffix(%d)", c.i)
@@ -279,7 +287,7 @@ func TestImageExistingNotTruncated(t *testing.T) {
 
 	// Populate image with data
 	content := []byte("this data must be preserved")
-	require.NoError(t, os.WriteFile(path, content, 0666))
+	require.NoError(t, os.WriteFile(path, content, 0o666))
 
 	// With size == -1 the image should already exist and its contents must not
 	// be modified
@@ -302,7 +310,8 @@ func TestCommandEscaping(t *testing.T) {
 	m := CreateMachine(t)
 	exitcode, err := m.RunInMachineWithArgs([]string{
 		"-test.v", "-test.run",
-		"TestCommandEscaping", "-testarg", "$s'n\\akes"})
+		"TestCommandEscaping", "-testarg", "$s'n\\akes",
+	})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
 }

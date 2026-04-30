@@ -30,7 +30,7 @@ func XzDecompressor(dst io.Writer, src io.Reader) error {
 		return fmt.Errorf("failed to create xz decompressor: %w", err)
 	}
 	// There is no Close() API. See: https://github.com/ulikunitz/xz/issues/45
-	//defer decompressor.Close()
+	// defer decompressor.Close()
 
 	_, err = io.Copy(dst, decompressor)
 	if err != nil {
