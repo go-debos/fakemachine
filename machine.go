@@ -221,8 +221,11 @@ func (m *Machine) addVolumesWithGlob(pattern string) error {
 	return nil
 }
 
+// Arch is a CPU architecture, named as in GOARCH. The machine always uses
+// the architecture of the host.
 type Arch string
 
+// Architectures fakemachine can run on.
 const (
 	Amd64 Arch = "amd64"
 	Arm64 Arch = "arm64"
@@ -250,6 +253,10 @@ type image struct {
 	label string
 }
 
+// Machine holds the configuration of a fakemachine: its backend, the host
+// volumes and disk images exposed to it, and its memory, CPU and scratch
+// space settings. It is set up with the Add*/Set*/CreateImage methods and
+// then started with Run, RunInMachine or RunInMachineWithArgs.
 type Machine struct {
 	arch       Arch
 	backend    backend
@@ -271,12 +278,17 @@ type Machine struct {
 	initrdpath  string
 }
 
-// Create a new machine object with the auto backend
+// NewMachine is NewMachineWithBackend with the "auto" backend, which picks
+// the first backend supported on this host.
 func NewMachine() (*Machine, error) {
 	return NewMachineWithBackend("auto")
 }
 
-// Create a new machine object
+// NewMachineWithBackend returns a Machine using the named backend (see
+// BackendNames) with default memory and CPU settings. The host's /usr, and
+// on non merged-usr hosts /bin, /sbin and /lib, plus some configuration
+// directories from /etc are always exposed to the machine. It fails if the
+// host architecture or the backend is not supported.
 func NewMachineWithBackend(backendName string) (*Machine, error) {
 	var err error
 	m := &Machine{memory: 2048, numcpus: runtime.NumCPU(), sectorSize: 512}
@@ -337,13 +349,15 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	return m, nil
 }
 
+// InMachine reports whether the current process is running inside a
+// fakemachine, based on the IN_FAKE_MACHINE environment variable.
 func InMachine() (ret bool) {
 	_, ret = os.LookupEnv("IN_FAKE_MACHINE")
 
 	return
 }
 
-// Check whether the auto backend is supported
+// Supported reports whether any backend can be used on this host.
 func Supported() bool {
 	_, err := newBackend("auto", nil)
 	return err == nil
@@ -686,6 +700,9 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	return nil
 }
 
+// SetEnviron sets the environment variables, in "KEY=value" form as
+// returned by os.Environ, for the command run in the machine. It replaces
+// any previously set variables.
 func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
