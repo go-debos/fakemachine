@@ -981,8 +981,12 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples
-func (m *Machine) startup(command string, extracontent [][2]string) (int, error) {
-	defer m.cleanup()
+func (m *Machine) startup(command string, extracontent [][2]string) (code int, err error) {
+	defer func() {
+		if cleanupErr := m.cleanup(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("cleanup failed: %w", cleanupErr))
+		}
+	}()
 
 	os.Setenv("PATH", os.Getenv("PATH")+":/sbin:/usr/sbin")
 
