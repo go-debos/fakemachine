@@ -20,6 +20,7 @@ linters:
     - maintidx
     - nakedret
     - predeclared
+    - gocritic
   exclusions:
     presets:
       - comments

@@ -494,7 +494,7 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 		}
 	}
 	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label, false})
-	m.count = m.count + 1
+	m.count++
 }
 
 // AddVolume mounts directory from the host at the same location in the
