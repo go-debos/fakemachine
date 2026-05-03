@@ -29,7 +29,6 @@ func CreateMachine(t *testing.T) *Machine {
 }
 
 func TestSuccessfulCommand(t *testing.T) {
-	t.Parallel()
 	m := CreateMachine(t)
 
 	exitcode, err := m.Run("ls /")
@@ -38,7 +37,6 @@ func TestSuccessfulCommand(t *testing.T) {
 }
 
 func TestCommandNotFound(t *testing.T) {
-	t.Parallel()
 	m := CreateMachine(t)
 
 	exitcode, err := m.Run("/a/b/c /")
@@ -47,7 +45,6 @@ func TestCommandNotFound(t *testing.T) {
 }
 
 func TestImage(t *testing.T) {
-	t.Parallel()
 	m := CreateMachine(t)
 
 	_, err := m.CreateImage("test.img", 1024*1024)
@@ -59,7 +56,6 @@ func TestImage(t *testing.T) {
 
 func AssertSectorSize(t *testing.T, sectorsize int) {
 	t.Helper()
-	t.Parallel()
 	if InMachine() {
 		for _, bstype := range []string{"physical", "logical"} {
 			device := "vda"
@@ -130,7 +126,6 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 }
 
 func TestScratchTmp(t *testing.T) {
-	t.Parallel()
 	if InMachine() {
 		AssertMount(t, "/scratch", "tmpfs")
 		return
@@ -144,7 +139,6 @@ func TestScratchTmp(t *testing.T) {
 }
 
 func TestScratchDisk(t *testing.T) {
-	t.Parallel()
 	if InMachine() {
 		AssertMount(t, "/scratch", "ext4")
 		return
@@ -159,7 +153,6 @@ func TestScratchDisk(t *testing.T) {
 }
 
 func TestMemory(t *testing.T) {
-	t.Parallel()
 	m := CreateMachine(t)
 
 	m.SetMemory(1024)
@@ -179,7 +172,6 @@ fi
 }
 
 func TestSpawnMachine(t *testing.T) {
-	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
 		return
@@ -193,7 +185,6 @@ func TestSpawnMachine(t *testing.T) {
 }
 
 func TestImageLabel(t *testing.T) {
-	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
@@ -226,7 +217,6 @@ func TestImageLabel(t *testing.T) {
 }
 
 func TestVolumes(t *testing.T) {
-	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
 		return
@@ -282,7 +272,6 @@ func TestImageLabelUniqueness(t *testing.T) {
 }
 
 func TestCommandEscaping(t *testing.T) {
-	t.Parallel()
 	if InMachine() {
 		t.Log("Running in the machine")
 		require.Equal(t, "$s'n\\akes", testArg)
