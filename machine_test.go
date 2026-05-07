@@ -107,6 +107,9 @@ func TestImage4kSectorSize(t *testing.T) {
 func AssertMount(t *testing.T, mountpoint, fstype string) {
 	m, err := os.Open("/proc/self/mounts")
 	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, m.Close())
+	}()
 
 	mtab := bufio.NewReader(m)
 
