@@ -41,10 +41,20 @@ func getModData(modname string, fieldname string, kernelRelease string) ([]strin
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
-		field := strings.Split(strings.TrimSpace(scanner.Text()), ":")
-		if strings.TrimSpace(field[0]) == fieldname {
-			fieldValue = append(fieldValue, strings.TrimSpace(field[1]))
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
 		}
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return nil, fmt.Errorf("unexpected modinfo output for module %q: %q", modname, line)
+		}
+		if strings.TrimSpace(name) == fieldname {
+			fieldValue = append(fieldValue, strings.TrimSpace(value))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan modinfo output for module %q: %w", modname, err)
 	}
 	return fieldValue, nil
 }
