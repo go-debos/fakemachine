@@ -512,13 +512,6 @@ func (m *Machine) AddVolume(directory string) {
 // The returned string is the device path of the new image as seen inside
 // fakemachine.
 func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_ string, err error) {
-	if size < 0 {
-		_, err := os.Stat(path)
-		if err != nil {
-			return "", fmt.Errorf("failed to stat image file %s: %w", path, err)
-		}
-	}
-
 	if len(label) >= 20 {
 		return "", fmt.Errorf("image label %q too long; cannot be more than 20 characters", label)
 	}
@@ -529,8 +522,16 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_
 		}
 	}
 
-	i, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
+	flags := os.O_WRONLY
+	if size >= 0 {
+		flags |= os.O_CREATE
+	}
+
+	i, err := os.OpenFile(path, flags, 0666)
 	if err != nil {
+		if size < 0 {
+			return "", fmt.Errorf("failed to open existing image file %s: %w", path, err)
+		}
 		return "", fmt.Errorf("failed to create image file %s: %w", path, err)
 	}
 	defer func() {
