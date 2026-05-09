@@ -11,80 +11,96 @@ import (
 	"testing"
 
 	"github.com/go-debos/fakemachine/cpio"
+	"github.com/stretchr/testify/require"
 )
 
-func checkStreamsMatch(t *testing.T, output, check io.Reader) error {
-	i := 0
+func checkStreamsMatch(output, check io.Reader) error {
+	var i int64
+
 	oreader := bufio.NewReader(output)
 	creader := bufio.NewReader(check)
+
 	for {
 		ochar, oerr := oreader.ReadByte()
+		if oerr != nil && !errors.Is(oerr, io.EOF) {
+			return fmt.Errorf("read output stream at byte %d: %w", i, oerr)
+		}
+
 		cchar, cerr := creader.ReadByte()
-		if oerr != nil || cerr != nil {
-			if oerr == io.EOF && cerr == io.EOF {
+		if cerr != nil && !errors.Is(cerr, io.EOF) {
+			return fmt.Errorf("read check stream at byte %d: %w", i, cerr)
+		}
+
+		if errors.Is(oerr, io.EOF) || errors.Is(cerr, io.EOF) {
+			switch {
+			case errors.Is(oerr, io.EOF) && errors.Is(cerr, io.EOF):
 				return nil
+			case errors.Is(oerr, io.EOF):
+				return fmt.Errorf("output stream shorter than check stream at byte %d", i)
+			default:
+				return fmt.Errorf("check stream shorter than output stream at byte %d", i)
 			}
-			if oerr != nil && oerr != io.EOF {
-				t.Errorf("Error reading output stream: %v", oerr)
-				return fmt.Errorf("error reading output stream: %w", oerr)
-			}
-			if cerr != nil && cerr != io.EOF {
-				t.Errorf("Error reading check stream: %v", cerr)
-				return fmt.Errorf("error reading check stream: %w", cerr)
-			}
-			return nil
 		}
 
 		if ochar != cchar {
-			t.Errorf("Mismatch at byte %d, values %d (output) and %d (check)",
-				i, ochar, cchar)
-			return errors.New("Data mismatch")
+			return fmt.Errorf("data mismatch at byte %d: output=0x%02x check=0x%02x", i, ochar, cchar)
 		}
+
 		i++
 	}
 }
 
-func decompressorTest(t *testing.T, file, suffix string, d writerhelper.Transformer) {
-	f, err := os.Open(path.Join("testdata", file+suffix))
+func decompressorTest(file, suffix string, d writerhelper.Transformer) (err error) {
+	testFilePath := path.Join("testdata", file+suffix)
+	f, err := os.Open(testFilePath)
 	if err != nil {
-		t.Errorf("Unable to open test data: %s", err)
-		return
+		return fmt.Errorf("open test file %s: %w", testFilePath, err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close test file %s: %w", testFilePath, closeErr))
+		}
+	}()
 
 	output := new(bytes.Buffer)
-	err = d(output, f)
-	if err != nil {
-		t.Errorf("Error whilst decompressing test file: %s", err)
-		return
+	if err := d(output, f); err != nil {
+		return fmt.Errorf("decompress test file %s: %w", testFilePath, err)
 	}
 
-	checkFile, err := os.Open(path.Join("testdata", file))
+	checkFilePath := path.Join("testdata", file)
+	checkFile, err := os.Open(checkFilePath)
 	if err != nil {
-		t.Errorf("Unable to open check data: %s", err)
-		return
+		return fmt.Errorf("open check file %s: %w", checkFilePath, err)
 	}
-	defer checkFile.Close()
+	defer func() {
+		if closeErr := checkFile.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close check file %s: %w", checkFilePath, closeErr))
+		}
+	}()
 
-	err = checkStreamsMatch(t, output, checkFile)
-	if err != nil {
-		t.Errorf("Failed to compare streams: %s", err)
-		return
+	if err := checkStreamsMatch(output, checkFile); err != nil {
+		return fmt.Errorf("compare decompressed output: %w", err)
 	}
+
+	return nil
 }
 
 func TestZstd(t *testing.T) {
-	decompressorTest(t, "test", ".zst", ZstdDecompressor)
+	err := decompressorTest("test", ".zst", ZstdDecompressor)
+	require.NoError(t, err)
 }
 
 func TestXz(t *testing.T) {
-	decompressorTest(t, "test", ".xz", XzDecompressor)
+	err := decompressorTest("test", ".xz", XzDecompressor)
+	require.NoError(t, err)
 }
 
 func TestGzip(t *testing.T) {
-	decompressorTest(t, "test", ".gz", GzipDecompressor)
+	err := decompressorTest("test", ".gz", GzipDecompressor)
+	require.NoError(t, err)
 }
 
 func TestNull(t *testing.T) {
-	decompressorTest(t, "test", "", NullDecompressor)
+	err := decompressorTest("test", "", NullDecompressor)
+	require.NoError(t, err)
 }
