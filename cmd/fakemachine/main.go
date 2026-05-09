@@ -31,39 +31,37 @@ type Options struct {
 var options Options
 var parser = flags.NewParser(&options, flags.Default)
 
-func GetDeterminedVersion(version string) string {
-	DeterminedVersion := "unknown"
+func determineVersionFromBuild() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
 
-	// Use the injected Version from build system if any.
-	// Otherwise try to determine the best version string from debug info.
-	if len(version) > 0 {
-		DeterminedVersion = version
-	} else {
-		info, ok := debug.ReadBuildInfo()
-		if ok {
-			// Try vcs version first as it will only be set on a local build
-			var revision *string
-			var modified *string
-			for _, s := range info.Settings {
-				if s.Key == "vcs.revision" {
-					revision = &s.Value
-				}
-				if s.Key == "vcs.modified" {
-					modified = &s.Value
-				}
-			}
-			if revision != nil {
-				DeterminedVersion = *revision
-				if modified != nil && *modified == "true" {
-					DeterminedVersion += "-dirty"
-				}
-			} else {
-				DeterminedVersion = info.Main.Version
-			}
+	// Try vcs version first as it will only be set on a local build
+	var revision string
+	var modified bool
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
 		}
 	}
 
-	return DeterminedVersion
+	if revision != "" {
+		if modified {
+			return revision + "-dirty"
+		}
+
+		return revision
+	}
+
+	if info.Main.Version != "" {
+		return info.Main.Version
+	}
+
+	return "unknown"
 }
 
 func warnLocalhost(variable string, value string) {
@@ -191,7 +189,12 @@ func main() {
 	}
 
 	if options.Version {
-		fmt.Printf("fakemachine %v\n", GetDeterminedVersion(Version))
+		// Use the injected Version from build system if set.
+		// Otherwise try to determine the version from the debug info.
+		if len(Version) == 0 {
+			Version = determineVersionFromBuild()
+		}
+		fmt.Printf("fakemachine %v\n", Version)
 		return
 	}
 
