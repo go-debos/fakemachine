@@ -4,6 +4,7 @@ linters:
     - asasalint
     - bodyclose
     - copyloopvar
+    - cyclop
     - dogsled
     - dupl
     - durationcheck
@@ -48,6 +49,9 @@ linters:
     - wastedassign
     - whitespace
     - wrapcheck
+  settings:
+    cyclop:
+      max-complexity: 40
 formatters:
   enable:
     - gofumpt
