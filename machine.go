@@ -114,29 +114,6 @@ var suffixes = map[string]writerhelper.Transformer{
 	".ko.zst": ZstdDecompressor,
 }
 
-func (m *Machine) transformModule(w *writerhelper.WriterHelper, modpath string) error {
-	for suffix, fn := range suffixes {
-		if !strings.HasSuffix(modpath, suffix) {
-			continue
-		}
-		if _, err := os.Stat(modpath); err != nil {
-			return fmt.Errorf("failed to stat module file %q: %w", modpath, err)
-		}
-		// The suffix is the complete thing - ".ko.foobar"
-		// Reinstate the required ".ko" part, after trimming.
-		dest := strings.TrimSuffix(modpath, suffix) + ".ko"
-		// Ensure destination has /usr prefix if running on merged-usr system.
-		if m.mergedUsr && !strings.HasPrefix(dest, "/usr") {
-			dest = "/usr" + dest
-		}
-		if err := w.TransformFileTo(modpath, dest, fn); err != nil {
-			return fmt.Errorf("failed to transform module file %q: %w", modpath, err)
-		}
-		return nil
-	}
-	return errors.New("kernel module extension/suffix unknown")
-}
-
 func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
 	release, err := m.backend.KernelRelease()
 	if err != nil {
@@ -151,8 +128,32 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 		return nil
 	}
 
-	if err := m.transformModule(w, modpath); err != nil {
-		return err
+	found := false
+	for suffix, fn := range suffixes {
+		if strings.HasSuffix(modpath, suffix) {
+			if _, err := os.Stat(modpath); err != nil {
+				return fmt.Errorf("failed to stat module file %q: %w", modpath, err)
+			}
+
+			// The suffix is the complete thing - ".ko.foobar"
+			// Reinstate the required ".ko" part, after trimming.
+			dest := strings.TrimSuffix(modpath, suffix) + ".ko"
+
+			// Ensure destination has /usr prefix if running
+			// on merged-usr system.
+			if m.mergedUsr && !strings.HasPrefix(dest, "/usr") {
+				dest = "/usr" + dest
+			}
+
+			if err := w.TransformFileTo(modpath, dest, fn); err != nil {
+				return fmt.Errorf("failed to transform module file %q: %w", modpath, err)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("kernel module extension/suffix unknown")
 	}
 
 	copiedModules[modname] = true
@@ -218,25 +219,6 @@ func (m *Machine) addVolumesWithGlob(pattern string) error {
 	}
 
 	return nil
-}
-
-func (m *Machine) addDefaultVolumes() error {
-	if err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
-		return err
-	}
-	if err := m.addVolumeIfExists("/etc/ssl"); err != nil {
-		return err
-	}
-	if err := m.addVolumesWithGlob("/etc/java*"); err != nil {
-		return err
-	}
-	if err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
-		return err
-	}
-	if err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
-		return err
-	}
-	return m.addVolumeIfExists("/var/lib/binfmts")
 }
 
 // Arch represents the CPU architecture of the fake machine.
@@ -328,7 +310,31 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 		m.addStaticVolume("/lib", "lib")
 	}
 
-	if err := m.addDefaultVolumes(); err != nil {
+	// Mounts for ssl certificates
+	if err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
+		return nil, err
+	}
+	if err := m.addVolumeIfExists("/etc/ssl"); err != nil {
+		return nil, err
+	}
+
+	// Mounts for java VM configuration, especially security policies
+	if err := m.addVolumesWithGlob("/etc/java*"); err != nil {
+		return nil, err
+	}
+
+	// Dbus configuration
+	if err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
+		return nil, err
+	}
+
+	// Debian alternative symlinks
+	if err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
+		return nil, err
+	}
+
+	// Debian binfmt registry
+	if err := m.addVolumeIfExists("/var/lib/binfmts"); err != nil {
 		return nil, err
 	}
 
@@ -766,199 +772,12 @@ func (m *Machine) cleanup() error {
 	return nil
 }
 
-func (m *Machine) writeCLibraries(w *writerhelper.WriterHelper, prefix string) error {
-	dynamicLinker := archDynamicLinker[m.arch]
-	if err := w.CopyFile(prefix + dynamicLinker); err != nil {
-		return fmt.Errorf("failed to copy dynamic linker: %w", err)
-	}
-	libraryDir, err := realDir(dynamicLinker)
-	if err != nil {
-		return err
-	}
-	if err := w.CopyFile(libraryDir + "/libc.so.6"); err != nil {
-		return fmt.Errorf("failed to copy libc.so.6: %w", err)
-	}
-	if err := w.CopyFile(libraryDir + "/libresolv.so.2"); err != nil {
-		return fmt.Errorf("failed to copy libresolv.so.2: %w", err)
-	}
-	return nil
-}
-
-func (m *Machine) writeBinaryDeps(w *writerhelper.WriterHelper, prefix string) error {
-	busybox, err := exec.LookPath("busybox")
-	if err != nil {
-		return fmt.Errorf("failed to find busybox: %w", err)
-	}
-	if err := w.CopyFileTo(busybox, prefix+"/bin/busybox"); err != nil {
-		return fmt.Errorf("failed to copy busybox: %w", err)
-	}
-	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
-		return fmt.Errorf("systemd-resolved not found: %w", err)
-	}
-	if err := m.writeCLibraries(w, prefix); err != nil {
-		return err
-	}
-	if err := w.WriteCharDevice("/dev/console", 5, 1, 0o700); err != nil {
-		return fmt.Errorf("failed to write /dev/console device: %w", err)
-	}
-	if err := w.CopyFile("/etc/ld.so.conf"); err != nil {
-		return fmt.Errorf("failed to copy ld.so.conf: %w", err)
-	}
-	if err := w.CopyTree("/etc/ld.so.conf.d"); err != nil {
-		return fmt.Errorf("failed to copy ld.so.conf.d: %w", err)
-	}
-	return nil
-}
-
-func writeSystemConfig(w *writerhelper.WriterHelper, b backend) error {
-	if err := w.WriteFile("/etc/machine-id", "", 0o444); err != nil {
-		return fmt.Errorf("failed to write machine-id: %w", err)
-	}
-	if err := w.WriteFile("/etc/hostname", "fakemachine", 0o444); err != nil {
-		return fmt.Errorf("failed to write hostname: %w", err)
-	}
-	if err := w.CopyFile("/etc/passwd"); err != nil {
-		return fmt.Errorf("failed to copy passwd: %w", err)
-	}
-	if err := w.CopyFile("/etc/group"); err != nil {
-		return fmt.Errorf("failed to copy group: %w", err)
-	}
-	if err := w.CopyFile("/etc/nsswitch.conf"); err != nil {
-		return fmt.Errorf("failed to copy nsswitch.conf: %w", err)
-	}
-	udevRules := strings.Join(b.UdevRules(), "\n") + "\n"
-	if err := w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0o444); err != nil {
-		return fmt.Errorf("failed to write udev rules: %w", err)
-	}
-	return nil
-}
-
-func writeNetworkConfig(w *writerhelper.WriterHelper) error {
-	if err := w.WriteFile("/etc/systemd/network/ethernet.network", networkdTemplate, 0o444); err != nil {
-		return fmt.Errorf("failed to write ethernet.network: %w", err)
-	}
-	if err := w.WriteFile("/etc/systemd/network/10-ethernet.link", networkdLinkTemplate, 0o444); err != nil {
-		return fmt.Errorf("failed to write ethernet.link: %w", err)
-	}
-	if err := w.WriteSymlink("/lib/systemd/resolv.conf", "/etc/resolv.conf", 0o755); err != nil {
-		return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
-	}
-	return nil
-}
-
-func writeCoreDirectories(w *writerhelper.WriterHelper) error {
-	err := w.WriteDirectories([]writerhelper.WriteDirectory{
-		{Directory: "/scratch", Perm: 0o1777},
-		{Directory: "/var/tmp", Perm: 0o1777},
-		{Directory: "/var/lib/dbus", Perm: 0o755},
-		{Directory: "/tmp", Perm: 0o1777},
-		{Directory: "/sys", Perm: 0o755},
-		{Directory: "/proc", Perm: 0o755},
-		{Directory: "/run", Perm: 0o755},
-		{Directory: "/usr", Perm: 0o755},
-		{Directory: "/usr/bin", Perm: 0o755},
-		{Directory: "/lib64", Perm: 0o755},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to write directories: %w", err)
-	}
-	if err := w.WriteSymlink("/run", "/var/run", 0o755); err != nil {
-		return fmt.Errorf("failed to write /var/run symlink: %w", err)
-	}
-	return nil
-}
-
-func writeMergedUsrPaths(w *writerhelper.WriterHelper, mergedUsr bool) (string, error) {
-	if mergedUsr {
-		err := w.WriteSymlinks([]writerhelper.WriteSymlink{
-			{Target: "/usr/sbin", Link: "/sbin", Perm: 0o755},
-			{Target: "/usr/bin", Link: "/bin", Perm: 0o755},
-			{Target: "/usr/lib", Link: "/lib", Perm: 0o755},
-			{Target: "/usr/lib64", Link: "/lib64", Perm: 0o755},
-		})
-		if err != nil {
-			return "", fmt.Errorf("failed to write merged-usr symlinks: %w", err)
-		}
-		return "/usr", nil
-	}
-	err := w.WriteDirectories([]writerhelper.WriteDirectory{
-		{Directory: "/sbin", Perm: 0o744},
-		{Directory: "/bin", Perm: 0o755},
-		{Directory: "/lib", Perm: 0o755},
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to write non-merged-usr directories: %w", err)
-	}
-	return "", nil
-}
-
-func (m *Machine) writeSystemdServices(w *writerhelper.WriterHelper, command, kernelModuleDir string) error {
-	if err := m.writerKernelModules(w, kernelModuleDir, m.backend.InitModules()); err != nil {
-		return fmt.Errorf("failed to write kernel modules: %w", err)
-	}
-	if err := w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0o644); err != nil {
-		return fmt.Errorf("failed to write fakemachine.service: %w", err)
-	}
-	if err := w.WriteSymlink(
-		"/lib/systemd/system/serial-getty@ttyS0.service",
-		"/dev/null",
-		0o755); err != nil {
-		return fmt.Errorf("failed to write serial-getty symlink: %w", err)
-	}
-	if err := w.WriteFile("/wrapper", fmt.Sprintf(commandWrapper, command), 0o755); err != nil {
-		return fmt.Errorf("failed to write wrapper script: %w", err)
-	}
-	init, err := executeInitScriptTemplate(m, m.backend)
-	if err != nil {
-		return err
-	}
-	if err := w.WriteFileRaw("/init", init, 0o755); err != nil {
-		return fmt.Errorf("failed to write init script: %w", err)
-	}
-	if err := m.generateFstab(w, m.backend); err != nil {
-		return fmt.Errorf("failed to generate fstab: %w", err)
-	}
-	return nil
-}
-
-func writeExtraContent(w *writerhelper.WriterHelper, extracontent [][2]string) error {
-	for _, v := range extracontent {
-		if err := w.CopyFileTo(v[0], v[1]); err != nil {
-			return fmt.Errorf("failed to copy extra content %s: %w", v[0], err)
-		}
-	}
-	return nil
-}
-
-func (m *Machine) fillInitrd(w *writerhelper.WriterHelper, command, kernelModuleDir string, extracontent [][2]string) error {
-	if err := writeCoreDirectories(w); err != nil {
-		return err
-	}
-	prefix, err := writeMergedUsrPaths(w, m.mergedUsr)
-	if err != nil {
-		return err
-	}
-	if err := m.writeBinaryDeps(w, prefix); err != nil {
-		return err
-	}
-	if err := writeSystemConfig(w, m.backend); err != nil {
-		return err
-	}
-	if err := writeNetworkConfig(w); err != nil {
-		return err
-	}
-	if err := m.writeSystemdServices(w, command, kernelModuleDir); err != nil {
-		return err
-	}
-	return writeExtraContent(w, extracontent)
-}
-
 func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err error) {
 	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create initrd file: %w", err)
 	}
+
 	defer func() {
 		if closeErr := f.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("failed to close initrd file: %w", closeErr))
@@ -977,66 +796,205 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		}
 	}()
 
-	return m.fillInitrd(w, command, kernelModuleDir, extracontent)
-}
+	err = w.WriteDirectories([]writerhelper.WriteDirectory{
+		{Directory: "/scratch", Perm: 0o1777},
+		{Directory: "/var/tmp", Perm: 0o1777},
+		{Directory: "/var/lib/dbus", Perm: 0o755},
+		{Directory: "/tmp", Perm: 0o1777},
+		{Directory: "/sys", Perm: 0o755},
+		{Directory: "/proc", Perm: 0o755},
+		{Directory: "/run", Perm: 0o755},
+		{Directory: "/usr", Perm: 0o755},
+		{Directory: "/usr/bin", Perm: 0o755},
+		{Directory: "/lib64", Perm: 0o755},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to write directories: %w", err)
+	}
 
-func (m *Machine) validateMounts() error {
-	for _, v := range m.mounts {
-		stat, err := os.Stat(v.hostDirectory)
+	err = w.WriteSymlink("/run", "/var/run", 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to write /var/run symlink: %w", err)
+	}
+
+	if m.mergedUsr {
+		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
+			{Target: "/usr/sbin", Link: "/sbin", Perm: 0o755},
+			{Target: "/usr/bin", Link: "/bin", Perm: 0o755},
+			{Target: "/usr/lib", Link: "/lib", Perm: 0o755},
+			{Target: "/usr/lib64", Link: "/lib64", Perm: 0o755},
+		})
 		if err != nil {
-			return fmt.Errorf("couldn't stat %s: %w", v.hostDirectory, err)
+			return fmt.Errorf("failed to write merged-usr symlinks: %w", err)
 		}
-		if !stat.IsDir() {
-			return fmt.Errorf("couldn't mount %s inside machine: expected a directory", v.hostDirectory)
-		}
-		if regexp.MustCompile(`\s`).MatchString(v.machineDirectory) {
-			return fmt.Errorf("couldn't mount %s inside machine: machine directory (%s) contains whitespace", v.hostDirectory, v.machineDirectory)
-		}
-		if regexp.MustCompile(`\s`).MatchString(v.label) {
-			return fmt.Errorf("couldn't mount %s inside machine: label (%s) contains whitespace", v.hostDirectory, v.label)
+	} else {
+		err = w.WriteDirectories([]writerhelper.WriteDirectory{
+			{Directory: "/sbin", Perm: 0o744},
+			{Directory: "/bin", Perm: 0o755},
+			{Directory: "/lib", Perm: 0o755},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to write non-merged-usr directories: %w", err)
 		}
 	}
-	return nil
-}
 
-func (m *Machine) startBackend(command, resultPath string) error {
-	// Set a default result of failure so that if the backend fails to start
-	// we get a defined exit code instead of an error reading the result file.
-	if err := os.WriteFile(resultPath, []byte("1"), 0o644); err != nil {
-		return fmt.Errorf("failed to create result file: %w", err)
+	prefix := ""
+	if m.mergedUsr {
+		prefix = "/usr"
 	}
-	if !m.quiet {
-		fmt.Printf("Running %s using %s backend\n", command, m.backend.Name())
-	}
-	success, err := m.backend.Start()
-	if err != nil {
-		return fmt.Errorf("error starting %s backend: %w", m.backend.Name(), err)
-	}
-	if !success {
-		return fmt.Errorf("error starting %s backend: unknown error", m.backend.Name())
-	}
-	return nil
-}
 
-func readExitCode(resultPath string) (_ int, err error) {
-	result, err := os.Open(resultPath)
+	// search for busybox; in some distros it's located under /sbin
+	busybox, err := exec.LookPath("busybox")
 	if err != nil {
-		return -1, fmt.Errorf("failed to open result file: %w", err)
+		return fmt.Errorf("failed to find busybox: %w", err)
 	}
-	defer func() {
-		if closeErr := result.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("failed to close result file: %w", closeErr))
+	err = w.CopyFileTo(busybox, prefix+"/bin/busybox")
+	if err != nil {
+		return fmt.Errorf("failed to copy busybox: %w", err)
+	}
+
+	/* Ensure systemd-resolved is available */
+	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
+		return fmt.Errorf("systemd-resolved not found: %w", err)
+	}
+
+	dynamicLinker := archDynamicLinker[m.arch]
+	err = w.CopyFile(prefix + dynamicLinker)
+	if err != nil {
+		return fmt.Errorf("failed to copy dynamic linker: %w", err)
+	}
+
+	/* C libraries */
+	libraryDir, err := realDir(dynamicLinker)
+	if err != nil {
+		return err
+	}
+	err = w.CopyFile(libraryDir + "/libc.so.6")
+	if err != nil {
+		return fmt.Errorf("failed to copy libc.so.6: %w", err)
+	}
+	err = w.CopyFile(libraryDir + "/libresolv.so.2")
+	if err != nil {
+		return fmt.Errorf("failed to copy libresolv.so.2: %w", err)
+	}
+
+	err = w.WriteCharDevice("/dev/console", 5, 1, 0o700)
+	if err != nil {
+		return fmt.Errorf("failed to write /dev/console device: %w", err)
+	}
+
+	// Linker configuration
+	err = w.CopyFile("/etc/ld.so.conf")
+	if err != nil {
+		return fmt.Errorf("failed to copy ld.so.conf: %w", err)
+	}
+
+	err = w.CopyTree("/etc/ld.so.conf.d")
+	if err != nil {
+		return fmt.Errorf("failed to copy ld.so.conf.d: %w", err)
+	}
+
+	// Core system configuration
+	err = w.WriteFile("/etc/machine-id", "", 0o444)
+	if err != nil {
+		return fmt.Errorf("failed to write machine-id: %w", err)
+	}
+
+	err = w.WriteFile("/etc/hostname", "fakemachine", 0o444)
+	if err != nil {
+		return fmt.Errorf("failed to write hostname: %w", err)
+	}
+
+	err = w.CopyFile("/etc/passwd")
+	if err != nil {
+		return fmt.Errorf("failed to copy passwd: %w", err)
+	}
+
+	err = w.CopyFile("/etc/group")
+	if err != nil {
+		return fmt.Errorf("failed to copy group: %w", err)
+	}
+
+	err = w.CopyFile("/etc/nsswitch.conf")
+	if err != nil {
+		return fmt.Errorf("failed to copy nsswitch.conf: %w", err)
+	}
+
+	// udev rules
+	udevRules := strings.Join(m.backend.UdevRules(), "\n") + "\n"
+	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0o444)
+	if err != nil {
+		return fmt.Errorf("failed to write udev rules: %w", err)
+	}
+
+	err = w.WriteFile("/etc/systemd/network/ethernet.network",
+		networkdTemplate, 0o444)
+	if err != nil {
+		return fmt.Errorf("failed to write ethernet.network: %w", err)
+	}
+
+	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
+		networkdLinkTemplate, 0o444)
+	if err != nil {
+		return fmt.Errorf("failed to write ethernet.link: %w", err)
+	}
+
+	err = w.WriteSymlink(
+		"/lib/systemd/resolv.conf",
+		"/etc/resolv.conf",
+		0o755)
+	if err != nil {
+		return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
+	}
+
+	err = m.writerKernelModules(w, kernelModuleDir, m.backend.InitModules())
+	if err != nil {
+		return fmt.Errorf("failed to write kernel modules: %w", err)
+	}
+
+	err = w.WriteFile("etc/systemd/system/fakemachine.service",
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0o644)
+	if err != nil {
+		return fmt.Errorf("failed to write fakemachine.service: %w", err)
+	}
+
+	err = w.WriteSymlink(
+		"/lib/systemd/system/serial-getty@ttyS0.service",
+		"/dev/null",
+		0o755)
+	if err != nil {
+		return fmt.Errorf("failed to write serial-getty symlink: %w", err)
+	}
+
+	err = w.WriteFile("/wrapper",
+		fmt.Sprintf(commandWrapper, command), 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to write wrapper script: %w", err)
+	}
+
+	init, err := executeInitScriptTemplate(m, m.backend)
+	if err != nil {
+		return err
+	}
+
+	err = w.WriteFileRaw("/init", init, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to write init script: %w", err)
+	}
+
+	err = m.generateFstab(w, m.backend)
+	if err != nil {
+		return fmt.Errorf("failed to generate fstab: %w", err)
+	}
+
+	for _, v := range extracontent {
+		err = w.CopyFileTo(v[0], v[1])
+		if err != nil {
+			return fmt.Errorf("failed to copy extra content %s: %w", v[0], err)
 		}
-	}()
-	exitstr, err := io.ReadAll(result)
-	if err != nil {
-		return -1, fmt.Errorf("failed to read result file: %w", err)
 	}
-	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
-	if err != nil {
-		return -1, fmt.Errorf("failed to parse exit code: %w", err)
-	}
-	return exitcode, nil
+
+	return nil
 }
 
 // Start the machine running the given command and adding the extra content to
@@ -1052,8 +1010,26 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		return -1, fmt.Errorf("failed to set PATH: %w", err)
 	}
 
-	if err := m.validateMounts(); err != nil {
-		return -1, err
+	/* Sanity check mountpoints */
+	for _, v := range m.mounts {
+		/* Check the directory exists on the host */
+		stat, err := os.Stat(v.hostDirectory)
+		if err != nil {
+			return -1, fmt.Errorf("couldn't stat %s: %w", v.hostDirectory, err)
+		}
+		if !stat.IsDir() {
+			return -1, fmt.Errorf("couldn't mount %s inside machine: expected a directory", v.hostDirectory)
+		}
+
+		/* Check for whitespace in the machine directory */
+		if regexp.MustCompile(`\s`).MatchString(v.machineDirectory) {
+			return -1, fmt.Errorf("couldn't mount %s inside machine: machine directory (%s) contains whitespace", v.hostDirectory, v.machineDirectory)
+		}
+
+		/* Check for whitespace in the label */
+		if regexp.MustCompile(`\s`).MatchString(v.label) {
+			return -1, fmt.Errorf("couldn't mount %s inside machine: label (%s) contains whitespace", v.hostDirectory, v.label)
+		}
 	}
 
 	tmpdir, err := os.MkdirTemp("", "fakemachine-")
@@ -1067,7 +1043,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		}
 	}()
 
-	if err = m.setupscratch(); err != nil {
+	err = m.setupscratch()
+	if err != nil {
 		return -1, err
 	}
 
@@ -1076,12 +1053,45 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		return -1, err
 	}
 
-	resultPath := path.Join(tmpdir, "result")
-	if err := m.startBackend(command, resultPath); err != nil {
-		return -1, err
+	if !m.quiet {
+		fmt.Printf("Running %s using %s backend\n", command, m.backend.Name())
 	}
 
-	return readExitCode(resultPath)
+	// Set a default result of failure so that if the backend fails to start
+	// we get a defined exit code instead of an error reading the result file.
+	resultPath := path.Join(tmpdir, "result")
+	if err := os.WriteFile(resultPath, []byte("1"), 0o644); err != nil {
+		return -1, fmt.Errorf("failed to create result file: %w", err)
+	}
+
+	success, err := m.backend.Start()
+	if err != nil {
+		return -1, fmt.Errorf("error starting %s backend: %w", m.backend.Name(), err)
+	}
+	if !success {
+		return -1, fmt.Errorf("error starting %s backend: unknown error", m.backend.Name())
+	}
+
+	result, err := os.Open(resultPath)
+	if err != nil {
+		return -1, fmt.Errorf("failed to open result file: %w", err)
+	}
+	defer func() {
+		if closeErr := result.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close result file: %w", closeErr))
+		}
+	}()
+
+	exitstr, err := io.ReadAll(result)
+	if err != nil {
+		return -1, fmt.Errorf("failed to read result file: %w", err)
+	}
+	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
+	if err != nil {
+		return -1, fmt.Errorf("failed to parse exit code: %w", err)
+	}
+
+	return exitcode, nil
 }
 
 // Run creates the machine running the given command

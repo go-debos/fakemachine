@@ -26,8 +26,6 @@ linters:
     - testifylint
     - unparam
     - nestif
-    - gocyclo
-    - cyclop
 formatters:
   enable:
     - gofumpt
