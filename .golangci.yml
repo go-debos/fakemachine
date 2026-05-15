@@ -25,6 +25,25 @@ linters:
     - noctx
     - testifylint
     - unparam
+    - nestif
+    - gocyclo
+    - cyclop
+  settings:
+    # TODO: is this disable for revive OK? what does it do?
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    # TODO: check complexity values
+    cyclop:
+      max-complexity: 70
+    gocyclo:
+      min-complexity: 70
+    nestif:
+      min-complexity: 17
+    # TODO: is this value OK? What does it do?
+    maintidx:
+      under: 5
 formatters:
   enable:
     - gofumpt
