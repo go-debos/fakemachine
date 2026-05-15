@@ -1,6 +1,7 @@
 package fakemachine
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -14,18 +15,39 @@ import (
 )
 
 func checkStreamsMatch(output, check io.Reader) error {
-	outBytes, err := io.ReadAll(output)
-	if err != nil {
-		return fmt.Errorf("read output stream: %w", err)
+	var i int64
+
+	oreader := bufio.NewReader(output)
+	creader := bufio.NewReader(check)
+
+	for {
+		ochar, oerr := oreader.ReadByte()
+		if oerr != nil && !errors.Is(oerr, io.EOF) {
+			return fmt.Errorf("read output stream at byte %d: %w", i, oerr)
+		}
+
+		cchar, cerr := creader.ReadByte()
+		if cerr != nil && !errors.Is(cerr, io.EOF) {
+			return fmt.Errorf("read check stream at byte %d: %w", i, cerr)
+		}
+
+		if errors.Is(oerr, io.EOF) || errors.Is(cerr, io.EOF) {
+			switch {
+			case errors.Is(oerr, io.EOF) && errors.Is(cerr, io.EOF):
+				return nil
+			case errors.Is(oerr, io.EOF):
+				return fmt.Errorf("output stream shorter than check stream at byte %d", i)
+			default:
+				return fmt.Errorf("check stream shorter than output stream at byte %d", i)
+			}
+		}
+
+		if ochar != cchar {
+			return fmt.Errorf("data mismatch at byte %d: output=0x%02x check=0x%02x", i, ochar, cchar)
+		}
+
+		i++
 	}
-	checkBytes, err := io.ReadAll(check)
-	if err != nil {
-		return fmt.Errorf("read check stream: %w", err)
-	}
-	if !bytes.Equal(outBytes, checkBytes) {
-		return fmt.Errorf("output (%d bytes) does not match expected (%d bytes)", len(outBytes), len(checkBytes))
-	}
-	return nil
 }
 
 func decompressorTest(suffix string, d writerhelper.Transformer) (err error) {
