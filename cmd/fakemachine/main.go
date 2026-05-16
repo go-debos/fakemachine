@@ -20,7 +20,7 @@ type Options struct {
 	Images      []string          `short:"i" long:"image" description:"image to add"`
 	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
 	Memory      string            `short:"m" long:"memory" description:"Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix)" default:"2Gb"`
-	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
+	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine (defaults to number of CPUs on the host)"`
 	SectorSize  int               `short:"S" long:"sectorsize" description:"Override image sector size"`
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
