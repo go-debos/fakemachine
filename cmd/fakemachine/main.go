@@ -19,7 +19,7 @@ type Options struct {
 	Volumes     []string          `short:"v" long:"volume" description:"volume to mount"`
 	Images      []string          `short:"i" long:"image" description:"image to add"`
 	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
-	Memory      int               `short:"m" long:"memory" description:"Amount of memory for the fakemachine in megabytes"`
+	Memory      string            `short:"m" long:"memory" description:"Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix)" default:"2Gb"`
 	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine"`
 	SectorSize  int               `short:"S" long:"sectorsize" description:"Override image sector size"`
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
@@ -221,9 +221,17 @@ func main() {
 		m.SetScratch(size, "")
 	}
 
-	if options.Memory > 0 {
-		m.SetMemory(options.Memory)
+	// Parse memory
+	memsize, err := units.RAMInBytes(options.Memory)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse --memory %q: %v\n", options.Memory, err)
+		os.Exit(1)
 	}
+	memsizeMB := int(memsize / 1024 / 1024)
+	if memsizeMB < 256 {
+		fmt.Printf("WARNING: Memory size of %dMB is less than recommended minimum 256MB\n", memsizeMB)
+	}
+	m.SetMemory(memsizeMB)
 
 	if options.CPUs > 0 {
 		m.SetNumCPUs(options.CPUs)
