@@ -150,7 +150,8 @@ jobs:
       uses: docker/build-push-action@v7
       with:
         context: .
-        push: true
+        # PR workflows do not have permission to publish GHCR images
+        push: ${{ github.event_name != 'pull_request' }}
         pull: true
         file: Dockerfile
         tags: ${{ steps.meta.outputs.tags }}
