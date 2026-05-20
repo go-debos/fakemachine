@@ -5,7 +5,17 @@
 fakemachine - fake a machine
 
 
-Creates a virtual machine based on the currently running system.
+fakemachine creates a virtual machine derived from the current root filesystem
+and allows the user to run commands inside it.
+
+It is provided as a standalone executable as well as a Go library and is
+primarily used by [debos](https://github.com/go-debos/debos) to execute image
+build actions inside a VM. This gives stronger isolation than chroot and allows
+unprivileged users to perform operations that would normally require root on the
+host, such as mounting filesystem images.
+
+If fakemachine is ran inside a container, the virtual machine's root filesystem
+is derived from the container's root filesystem.
 
 # SYNOPSIS
 
