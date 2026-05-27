@@ -1,15 +1,18 @@
+// Package main is the entry point for the fakemachine command-line tool.
 package main
 
 import (
-	"al.essio.dev/pkg/shellescape"
 	"errors"
 	"fmt"
-	"github.com/docker/go-units"
-	"github.com/go-debos/fakemachine"
-	"github.com/jessevdk/go-flags"
 	"os"
 	"runtime/debug"
 	"strings"
+
+	"al.essio.dev/pkg/shellescape"
+
+	"github.com/docker/go-units"
+	"github.com/go-debos/fakemachine"
+	"github.com/jessevdk/go-flags"
 )
 
 var Version string
@@ -28,8 +31,10 @@ type Options struct {
 	Version     bool              `long:"version" description:"Print fakemachine version"`
 }
 
-var options Options
-var parser = flags.NewParser(&options, flags.Default)
+var (
+	options Options
+	parser  = flags.NewParser(&options, flags.Default)
+)
 
 func determineVersionFromBuild() string {
 	info, ok := debug.ReadBuildInfo()
@@ -131,7 +136,7 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	// These are the environment variables that will be detected on the
 	// host and propagated to fakemachine. These are listed lower case, but
 	// they are detected and configured in both lower case and upper case.
-	var environVars = [...]string{
+	environVars := [...]string{
 		"http_proxy",
 		"https_proxy",
 		"ftp_proxy",
@@ -166,7 +171,7 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	}
 
 	// Puts in a format that is compatible with output of os.Environ()
-	EnvironString := []string{}
+	EnvironString := make([]string, 0, len(EnvironVars))
 	for k, v := range EnvironVars {
 		warnLocalhost(k, v)
 		EnvironString = append(EnvironString, fmt.Sprintf("%s=%s", k, v))
