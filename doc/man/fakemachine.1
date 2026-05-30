@@ -19,8 +19,8 @@ Application Options:
   \-v, \-\-volume=                 volume to mount
   \-i, \-\-image=                  image to add
   \-e, \-\-environ\-var=            Environment variables (use \-e VARIABLE:VALUE syntax)
-  \-m, \-\-memory=                 Amount of memory for the fakemachine in megabytes
-  \-c, \-\-cpus=                   Number of CPUs for the fakemachine
+  \-m, \-\-memory=                 Amount of memory for the fakemachine (parsed with human\-readable suffix; assumed bytes if no suffix) (default: 2Gb)
+  \-c, \-\-cpus=                   Number of CPUs for the fakemachine (defaults to number of CPUs on the host)
   \-S, \-\-sectorsize=             Override image sector size
   \-s, \-\-scratchsize=            On\-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used
       \-\-show\-boot               Show boot/console messages from the fakemachine
