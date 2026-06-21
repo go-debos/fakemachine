@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/setup-go@v6
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v9
       with:
@@ -29,7 +29,7 @@ jobs:
     name: Check if man page has been regenerated
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Check man page
       run: |
         sudo apt-get update
@@ -76,7 +76,7 @@ jobs:
       TMP: /scratch
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
         filter: tree:0
@@ -107,7 +107,7 @@ jobs:
       - test
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
         filter: tree:0
