@@ -400,20 +400,38 @@ if [ $? != 0 ]; then
   exit
 fi
 
+%[2]s
 %[1]s
 echo $? > /run/fakemachine/result
 `
 
+// resolvConfWrapper is injected into the command wrapper (as '%[2]s') when
+// systemd-resolved is not available on the host. The DHCP lease written by
+// systemd-networkd carries the DNS servers handed out by the network - this
+// extracts them and writes a plain /etc/resolv.conf so fakemachine can resolve
+// names without a running resolver.
+const resolvConfWrapper = `
+rm -f /etc/resolv.conf
+: > /etc/resolv.conf
+for lease in /run/systemd/netif/leases/*; do
+  [ -f "$lease" ] || continue
+  for dns in $(sed -n 's/^DNS=//p' "$lease"); do
+    echo "nameserver $dns" >> /etc/resolv.conf
+  done
+done
+`
+
 // The line 'Environment=%[2]s' is used for environment variables optionally
-// configured using Machine.SetEnviron()
+// configured using Machine.SetEnviron(). '%[3]s' can be used to set additional
+// systemd service dependencies.
 const serviceTemplate = `
 [Unit]
 Description=fakemachine runner
 Conflicts=shutdown.target
 Before=shutdown.target
 Requires=basic.target
-Wants=systemd-resolved.service binfmt-support.service systemd-networkd.service
-After=basic.target systemd-resolved.service binfmt-support.service systemd-networkd.service
+Wants=binfmt-support.service systemd-networkd.service%[3]s
+After=basic.target binfmt-support.service systemd-networkd.service%[3]s
 OnFailure=poweroff.target
 
 [Service]
@@ -846,11 +864,6 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		return fmt.Errorf("failed to copy busybox: %w", err)
 	}
 
-	/* Ensure systemd-resolved is available */
-	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err != nil {
-		return fmt.Errorf("systemd-resolved not found: %w", err)
-	}
-
 	dynamicLinker := archDynamicLinker[m.arch]
 	err = w.CopyFile(prefix + dynamicLinker)
 	if err != nil {
@@ -932,12 +945,32 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		return fmt.Errorf("failed to write ethernet.link: %w", err)
 	}
 
-	err = w.WriteSymlink(
-		"/lib/systemd/resolv.conf",
-		"/etc/resolv.conf",
-		0755)
-	if err != nil {
-		return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
+	/* systemd-resolved is optional: when it is available on the host it is used
+	   as the resolver. When it is not available, fallback to generating
+	   /etc/resolv.conf from the DHCP lease at runtime. */
+	systemdResolvedPresent := false
+	if _, err := os.Stat("/lib/systemd/systemd-resolved"); err == nil {
+		systemdResolvedPresent = true
+	}
+
+	resolvDep := ""
+	resolvConf := ""
+	if systemdResolvedPresent {
+		// Point resolv.conf at the systemd-resolved stub resolver
+		err = w.WriteSymlink(
+			"/lib/systemd/resolv.conf",
+			"/etc/resolv.conf",
+			0755)
+		if err != nil {
+			return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
+		}
+
+		// Add systemd-resolved to the systemd dependencies
+		resolvDep = " systemd-resolved.service"
+	} else {
+		/* If systemd-resolved is not present, add the mechanism to /wrapper to
+		   generate /etc/resolv.conf. */
+		resolvConf = resolvConfWrapper
 	}
 
 	err = m.writerKernelModules(w, kernelModuleDir, m.backend.InitModules())
@@ -946,7 +979,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	err = w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " "), resolvDep), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write fakemachine.service: %w", err)
 	}
@@ -960,7 +993,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	err = w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, command), 0755)
+		fmt.Sprintf(commandWrapper, command, resolvConf), 0755)
 	if err != nil {
 		return fmt.Errorf("failed to write wrapper script: %w", err)
 	}
