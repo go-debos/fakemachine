@@ -44,6 +44,14 @@ func TestCommandNotFound(t *testing.T) {
 	require.Equal(t, 127, exitcode)
 }
 
+func TestNetworkDNS(t *testing.T) {
+	m := CreateMachine(t)
+
+	exitcode, err := m.Run("getent hosts deb.debian.org")
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
 func TestImage(t *testing.T) {
 	m := CreateMachine(t)
 
