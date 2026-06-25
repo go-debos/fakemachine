@@ -3,9 +3,9 @@
 package fakemachine
 
 import (
-	"al.essio.dev/pkg/shellescape"
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"al.essio.dev/pkg/shellescape"
 
 	writerhelper "github.com/go-debos/fakemachine/cpio"
 )
@@ -35,7 +37,7 @@ func mergedUsrSystem() (bool, error) {
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
 func getModData(modname string, fieldname string, kernelRelease string) ([]string, error) {
-	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
+	out, err := exec.CommandContext(context.Background(), "modinfo", "-k", kernelRelease, modname).Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to call modinfo for module %q and kernel release %q: %w", modname, kernelRelease, err)
 	}
@@ -184,27 +186,24 @@ func realDir(path string) (string, error) {
 }
 
 // addVolumeIfExists adds volumePath as a machine volume if it exists on the host.
-//
-// It returns true if the volume was added. A missing path is not treated as an
-// error and returns false, nil. If the path exists but is not a directory, or
-// cannot be checked, it returns false and an error.
-func (m *Machine) addVolumeIfExists(volumePath string) (bool, error) {
+// A missing path is not treated as an error. If the path exists but is not a
+// directory, or cannot be checked, it returns an error.
+func (m *Machine) addVolumeIfExists(volumePath string) error {
 	stat, err := os.Stat(volumePath)
-
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
+			return nil
 		}
 
-		return false, fmt.Errorf("failed to check %q: %w", volumePath, err)
+		return fmt.Errorf("failed to check %q: %w", volumePath, err)
 	}
 
 	if !stat.IsDir() {
-		return false, fmt.Errorf("failed to add volume %q: not a directory", volumePath)
+		return fmt.Errorf("failed to add volume %q: not a directory", volumePath)
 	}
 
 	m.AddVolume(volumePath)
-	return true, nil
+	return nil
 }
 
 func (m *Machine) addVolumesWithGlob(pattern string) error {
@@ -214,7 +213,7 @@ func (m *Machine) addVolumesWithGlob(pattern string) error {
 	}
 
 	for _, volumePath := range matches {
-		if _, err := m.addVolumeIfExists(volumePath); err != nil {
+		if err := m.addVolumeIfExists(volumePath); err != nil {
 			return err
 		}
 	}
@@ -222,8 +221,10 @@ func (m *Machine) addVolumesWithGlob(pattern string) error {
 	return nil
 }
 
+// Arch represents the CPU architecture of the fake machine.
 type Arch string
 
+// Supported architecture constants.
 const (
 	Amd64 Arch = "amd64"
 	Arm64 Arch = "arm64"
@@ -251,6 +252,8 @@ type image struct {
 	label string
 }
 
+// Machine represents a fake machine instance that runs commands in a virtual
+// environment using one of the available backends.
 type Machine struct {
 	arch       Arch
 	backend    backend
@@ -272,12 +275,12 @@ type Machine struct {
 	initrdpath  string
 }
 
-// Create a new machine object with the auto backend
+// NewMachine creates a new machine object using the auto-selected backend.
 func NewMachine() (*Machine, error) {
 	return NewMachineWithBackend("auto")
 }
 
-// Create a new machine object
+// NewMachineWithBackend creates a new machine object using the named backend.
 func NewMachineWithBackend(backendName string) (*Machine, error) {
 	var err error
 	m := &Machine{memory: 2048, numcpus: runtime.NumCPU(), sectorSize: 512}
@@ -308,10 +311,10 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	}
 
 	// Mounts for ssl certificates
-	if _, err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
+	if err := m.addVolumeIfExists("/etc/ca-certificates"); err != nil {
 		return nil, err
 	}
-	if _, err := m.addVolumeIfExists("/etc/ssl"); err != nil {
+	if err := m.addVolumeIfExists("/etc/ssl"); err != nil {
 		return nil, err
 	}
 
@@ -321,30 +324,31 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 	}
 
 	// Dbus configuration
-	if _, err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
+	if err := m.addVolumeIfExists("/etc/dbus-1"); err != nil {
 		return nil, err
 	}
 
 	// Debian alternative symlinks
-	if _, err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
+	if err := m.addVolumeIfExists("/etc/alternatives"); err != nil {
 		return nil, err
 	}
 
 	// Debian binfmt registry
-	if _, err := m.addVolumeIfExists("/var/lib/binfmts"); err != nil {
+	if err := m.addVolumeIfExists("/var/lib/binfmts"); err != nil {
 		return nil, err
 	}
 
 	return m, nil
 }
 
+// InMachine reports whether the current process is running inside a fake machine.
 func InMachine() (ret bool) {
 	_, ret = os.LookupEnv("IN_FAKE_MACHINE")
 
 	return
 }
 
-// Check whether the auto backend is supported
+// Supported reports whether the auto backend is supported on the current machine.
 func Supported() bool {
 	_, err := newBackend("auto", nil)
 	return err == nil
@@ -367,6 +371,7 @@ busybox modprobe {{ $m }}
 
 exec /lib/systemd/systemd
 `
+
 const networkdTemplate = `
 [Match]
 Type=ether
@@ -494,7 +499,7 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 		}
 	}
 	m.mounts = append(m.mounts, mountPoint{hostDirectory, machineDirectory, label, false})
-	m.count = m.count + 1
+	m.count++
 }
 
 // AddVolume mounts directory from the host at the same location in the
@@ -527,7 +532,7 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_
 		flags |= os.O_CREATE
 	}
 
-	i, err := os.OpenFile(path, flags, 0666)
+	i, err := os.OpenFile(path, flags, 0o666)
 	if err != nil {
 		if size < 0 {
 			return "", fmt.Errorf("failed to open existing image file %s: %w", path, err)
@@ -625,7 +630,7 @@ func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) er
 	}
 	fstab = append(fstab, "")
 
-	err := w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0755)
+	err := w.WriteFile("/etc/fstab", strings.Join(fstab, "\n"), 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write fstab: %w", err)
 	}
@@ -680,12 +685,13 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	}
 
 	path := path.Join(moddir, "modules.dep")
-	if err := w.WriteFile(path, strings.Join(output, "\n"), 0644); err != nil {
+	if err := w.WriteFile(path, strings.Join(output, "\n"), 0o644); err != nil {
 		return fmt.Errorf("failed to write modules.dep: %w", err)
 	}
 	return nil
 }
 
+// SetEnviron sets additional environment variables to pass into the fake machine.
 func (m *Machine) SetEnviron(environ []string) {
 	m.Environ = environ
 }
@@ -698,7 +704,8 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 	modfiles := []string{
 		"modules.builtin",
 		"modules.alias",
-		"modules.symbols"}
+		"modules.symbols",
+	}
 
 	for _, v := range modfiles {
 		if err := w.CopyFile(moddir + "/" + v); err != nil {
@@ -743,7 +750,7 @@ func (m *Machine) setupscratch() error {
 	if err != nil {
 		return err
 	}
-	mkfs := exec.Command("mkfs.ext4", "-q", m.scratchfile)
+	mkfs := exec.CommandContext(context.Background(), "mkfs.ext4", "-q", m.scratchfile)
 	err = mkfs.Run()
 	if err != nil {
 		return fmt.Errorf("failed to format scratch disk: %w", err)
@@ -766,7 +773,7 @@ func (m *Machine) cleanup() error {
 }
 
 func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err error) {
-	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create initrd file: %w", err)
 	}
@@ -790,41 +797,41 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}()
 
 	err = w.WriteDirectories([]writerhelper.WriteDirectory{
-		{Directory: "/scratch", Perm: 01777},
-		{Directory: "/var/tmp", Perm: 01777},
-		{Directory: "/var/lib/dbus", Perm: 0755},
-		{Directory: "/tmp", Perm: 01777},
-		{Directory: "/sys", Perm: 0755},
-		{Directory: "/proc", Perm: 0755},
-		{Directory: "/run", Perm: 0755},
-		{Directory: "/usr", Perm: 0755},
-		{Directory: "/usr/bin", Perm: 0755},
-		{Directory: "/lib64", Perm: 0755},
+		{Directory: "/scratch", Perm: 0o1777},
+		{Directory: "/var/tmp", Perm: 0o1777},
+		{Directory: "/var/lib/dbus", Perm: 0o755},
+		{Directory: "/tmp", Perm: 0o1777},
+		{Directory: "/sys", Perm: 0o755},
+		{Directory: "/proc", Perm: 0o755},
+		{Directory: "/run", Perm: 0o755},
+		{Directory: "/usr", Perm: 0o755},
+		{Directory: "/usr/bin", Perm: 0o755},
+		{Directory: "/lib64", Perm: 0o755},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to write directories: %w", err)
 	}
 
-	err = w.WriteSymlink("/run", "/var/run", 0755)
+	err = w.WriteSymlink("/run", "/var/run", 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write /var/run symlink: %w", err)
 	}
 
 	if m.mergedUsr {
 		err = w.WriteSymlinks([]writerhelper.WriteSymlink{
-			{Target: "/usr/sbin", Link: "/sbin", Perm: 0755},
-			{Target: "/usr/bin", Link: "/bin", Perm: 0755},
-			{Target: "/usr/lib", Link: "/lib", Perm: 0755},
-			{Target: "/usr/lib64", Link: "/lib64", Perm: 0755},
+			{Target: "/usr/sbin", Link: "/sbin", Perm: 0o755},
+			{Target: "/usr/bin", Link: "/bin", Perm: 0o755},
+			{Target: "/usr/lib", Link: "/lib", Perm: 0o755},
+			{Target: "/usr/lib64", Link: "/lib64", Perm: 0o755},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to write merged-usr symlinks: %w", err)
 		}
 	} else {
 		err = w.WriteDirectories([]writerhelper.WriteDirectory{
-			{Directory: "/sbin", Perm: 0744},
-			{Directory: "/bin", Perm: 0755},
-			{Directory: "/lib", Perm: 0755},
+			{Directory: "/sbin", Perm: 0o744},
+			{Directory: "/bin", Perm: 0o755},
+			{Directory: "/lib", Perm: 0o755},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to write non-merged-usr directories: %w", err)
@@ -871,7 +878,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		return fmt.Errorf("failed to copy libresolv.so.2: %w", err)
 	}
 
-	err = w.WriteCharDevice("/dev/console", 5, 1, 0700)
+	err = w.WriteCharDevice("/dev/console", 5, 1, 0o700)
 	if err != nil {
 		return fmt.Errorf("failed to write /dev/console device: %w", err)
 	}
@@ -888,12 +895,12 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	// Core system configuration
-	err = w.WriteFile("/etc/machine-id", "", 0444)
+	err = w.WriteFile("/etc/machine-id", "", 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write machine-id: %w", err)
 	}
 
-	err = w.WriteFile("/etc/hostname", "fakemachine", 0444)
+	err = w.WriteFile("/etc/hostname", "fakemachine", 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write hostname: %w", err)
 	}
@@ -915,19 +922,19 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 
 	// udev rules
 	udevRules := strings.Join(m.backend.UdevRules(), "\n") + "\n"
-	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0444)
+	err = w.WriteFile("/etc/udev/rules.d/61-fakemachine.rules", udevRules, 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write udev rules: %w", err)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/ethernet.network",
-		networkdTemplate, 0444)
+		networkdTemplate, 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write ethernet.network: %w", err)
 	}
 
 	err = w.WriteFile("/etc/systemd/network/10-ethernet.link",
-		networkdLinkTemplate, 0444)
+		networkdLinkTemplate, 0o444)
 	if err != nil {
 		return fmt.Errorf("failed to write ethernet.link: %w", err)
 	}
@@ -935,7 +942,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	err = w.WriteSymlink(
 		"/lib/systemd/resolv.conf",
 		"/etc/resolv.conf",
-		0755)
+		0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write resolv.conf symlink: %w", err)
 	}
@@ -946,7 +953,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	err = w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to write fakemachine.service: %w", err)
 	}
@@ -954,13 +961,13 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	err = w.WriteSymlink(
 		"/lib/systemd/system/serial-getty@ttyS0.service",
 		"/dev/null",
-		0755)
+		0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write serial-getty symlink: %w", err)
 	}
 
 	err = w.WriteFile("/wrapper",
-		fmt.Sprintf(commandWrapper, command), 0755)
+		fmt.Sprintf(commandWrapper, command), 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write wrapper script: %w", err)
 	}
@@ -970,7 +977,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		return err
 	}
 
-	err = w.WriteFileRaw("/init", init, 0755)
+	err = w.WriteFileRaw("/init", init, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to write init script: %w", err)
 	}
@@ -1053,7 +1060,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	// Set a default result of failure so that if the backend fails to start
 	// we get a defined exit code instead of an error reading the result file.
 	resultPath := path.Join(tmpdir, "result")
-	if err := os.WriteFile(resultPath, []byte("1"), 0644); err != nil {
+	if err := os.WriteFile(resultPath, []byte("1"), 0o644); err != nil {
 		return -1, fmt.Errorf("failed to create result file: %w", err)
 	}
 
@@ -1080,7 +1087,6 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		return -1, fmt.Errorf("failed to read result file: %w", err)
 	}
 	exitcode, err := strconv.Atoi(strings.TrimSpace(string(exitstr)))
-
 	if err != nil {
 		return -1, fmt.Errorf("failed to parse exit code: %w", err)
 	}
@@ -1102,7 +1108,6 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	command := strings.Join([]string{name, quotedArgs}, " ")
 
 	executable, err := exec.LookPath(os.Args[0])
-
 	if err != nil {
 		return -1, fmt.Errorf("failed to find executable: %w", err)
 	}
