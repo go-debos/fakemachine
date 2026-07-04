@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -269,6 +270,25 @@ func TestImageLabelUniqueness(t *testing.T) {
 
 	_, err = m.CreateImageWithLabel("test2.img", 1024*1024, "my-disk")
 	require.Error(t, err)
+}
+
+func TestImageExistingNotTruncated(t *testing.T) {
+	m := CreateMachine(t)
+
+	path := filepath.Join(t.TempDir(), "existing.img")
+
+	// Populate image with data
+	content := []byte("this data must be preserved")
+	require.NoError(t, os.WriteFile(path, content, 0666))
+
+	// With size == -1 the image should already exist and its contents must not
+	// be modified
+	_, err := m.CreateImageWithLabel(path, -1, "existing")
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, content, got, "existing image contents must not be truncated")
 }
 
 func TestCommandEscaping(t *testing.T) {
