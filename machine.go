@@ -522,7 +522,7 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_
 		}
 	}
 
-	flags := os.O_WRONLY | os.O_TRUNC
+	flags := os.O_WRONLY
 	if size >= 0 {
 		flags |= os.O_CREATE
 	}
