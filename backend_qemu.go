@@ -177,7 +177,7 @@ func (b qemuBackend) ModulePath() (string, error) {
 }
 
 func (b qemuBackend) UdevRules() []string {
-	udevRules := []string{}
+	udevRules := make([]string, 0, 2*len(b.machine.images))
 
 	// create symlink under /dev/disk/by-fakemachine-label/ for each virtual image
 	for i, img := range b.machine.images {
@@ -228,14 +228,16 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
-	qemuargs := []string{qemuMachine.binary,
+	qemuargs := []string{
+		qemuMachine.binary,
 		"-smp", numcpus,
 		"-m", memory,
 		"-kernel", kernelPath,
 		"-initrd", m.initrdpath,
 		"-display", "none",
 		"-nic", "user,model=virtio-net-pci",
-		"-no-reboot"}
+		"-no-reboot",
+	}
 
 	if kvm {
 		qemuargs = append(qemuargs,
@@ -247,9 +249,11 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 
 	qemuargs = append(qemuargs, "-machine", qemuMachine.machine)
 	console := fmt.Sprintf("console=%s", qemuMachine.console)
-	kernelargs := []string{console, "panic=-1",
+	kernelargs := []string{
+		console, "panic=-1",
 		"plymouth.enable=0",
-		"systemd.unit=fakemachine.service"}
+		"systemd.unit=fakemachine.service",
+	}
 
 	if m.showBoot {
 		// Create a character device representing our stdio
