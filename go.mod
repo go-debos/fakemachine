@@ -9,7 +9,7 @@ require (
 	github.com/klauspost/compress v1.19.0
 	github.com/stretchr/testify v1.11.1
 	github.com/surma/gocpio v1.1.0
-	github.com/ulikunitz/xz v0.5.15
+	github.com/ulikunitz/xz v0.5.16
 	golang.org/x/sys v0.41.0
 )
 
