@@ -1,9 +1,9 @@
 version: "2"
 linters:
   enable:
-    - govet
     - errcheck
     - errorlint
+    - govet
     - misspell
     - revive
     - staticcheck
