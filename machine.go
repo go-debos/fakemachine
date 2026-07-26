@@ -353,6 +353,7 @@ func Supported() bool {
 	return err == nil
 }
 
+//nolint:dupword // "proc" is intentionally repeated as the filesystem type and source.
 const initScript = `#!/bin/busybox sh
 
 busybox mount -t proc proc /proc
