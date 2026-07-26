@@ -9,6 +9,7 @@ linters:
     - dogsled
     - dupl
     - durationcheck
+    - embeddedstructfieldcheck
     - errcheck
     - errchkjson
     - errname

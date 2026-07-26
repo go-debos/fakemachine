@@ -19,8 +19,9 @@ import (
 // written, so every entry's missing parent directories are created (mode
 // 0755) before the entry itself.
 type WriterHelper struct {
-	paths map[string]bool
 	*cpio.Writer
+
+	paths map[string]bool
 }
 
 // WriteDirectory describes a directory for WriterHelper.WriteDirectories.
