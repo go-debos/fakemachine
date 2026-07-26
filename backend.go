@@ -10,7 +10,7 @@ import (
 	"fmt"
 )
 
-// List of backends in order of their priority in the "auto" algorithm
+// List of backends in order of their priority in the "auto" algorithm.
 func implementedBackends(m *Machine) []backend {
 	return []backend{
 		newKvmBackend(m),
