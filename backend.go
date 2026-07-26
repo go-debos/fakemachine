@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Package fakemachine provides a lightweight virtual machine abstraction for
 // running commands in an isolated environment.
