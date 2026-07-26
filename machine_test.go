@@ -75,6 +75,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 
 			require.Equal(t, sectorsize, sz)
 		}
+
 		return
 	}
 
@@ -120,6 +121,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 		line, err := mtab.ReadString('\n')
 		if err == io.EOF {
 			require.Fail(t, "mountpoint not found")
+
 			break
 		}
 		require.NoError(t, err)
@@ -127,6 +129,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 		fields := strings.Fields(line)
 		if fields[1] == mountpoint {
 			require.Equal(t, fstype, fields[2])
+
 			return
 		}
 	}
@@ -135,6 +138,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 func TestScratchTmp(t *testing.T) {
 	if InMachine() {
 		AssertMount(t, "/scratch", "tmpfs")
+
 		return
 	}
 
@@ -148,6 +152,7 @@ func TestScratchTmp(t *testing.T) {
 func TestScratchDisk(t *testing.T) {
 	if InMachine() {
 		AssertMount(t, "/scratch", "ext4")
+
 		return
 	}
 
@@ -181,6 +186,7 @@ fi
 func TestSpawnMachine(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
+
 		return
 	}
 
@@ -226,6 +232,7 @@ func TestImageLabel(t *testing.T) {
 func TestVolumes(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
+
 		return
 	}
 
@@ -311,6 +318,7 @@ func TestCommandEscaping(t *testing.T) {
 		t.Log("Running in the machine")
 		require.Equal(t, "$s'n\\akes", testArg)
 		t.Log(testArg)
+
 		return
 	}
 

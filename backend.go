@@ -56,10 +56,13 @@ func newBackend(name string, m *Machine) (backend, error) {
 				} else {
 					err = backendErr
 				}
+
 				continue
 			}
+
 			return b, nil
 		}
+
 		return nil, err
 	}
 
