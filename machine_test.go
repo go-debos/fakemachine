@@ -24,6 +24,7 @@ func init() {
 }
 
 func CreateMachine(t *testing.T) *Machine {
+	t.Helper()
 	machine, err := NewMachineWithBackend(backendName)
 	require.NoError(t, err)
 	machine.SetNumCPUs(2)
@@ -104,6 +105,7 @@ func TestImage4kSectorSize(t *testing.T) {
 }
 
 func AssertMount(t *testing.T, mountpoint, fstype string) {
+	t.Helper()
 	m, err := os.Open("/proc/self/mounts")
 	require.NoError(t, err)
 	defer func() {

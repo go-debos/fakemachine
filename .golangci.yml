@@ -46,6 +46,7 @@ linters:
     - staticcheck
     - testableexamples
     - testifylint
+    - thelper
     - tparallel
     - unconvert
     - unparam
