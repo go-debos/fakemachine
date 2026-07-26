@@ -52,6 +52,8 @@ func checkStreamsMatch(output, check io.Reader) error {
 
 func decompressorTest(suffix string, d writerhelper.Transformer) (err error) {
 	testFilePath := path.Join("testdata", "test"+suffix)
+
+	//nolint:gosec // testFilePath refers to a test fixture selected by the test.
 	f, err := os.Open(testFilePath)
 	if err != nil {
 		return fmt.Errorf("open test file %s: %w", testFilePath, err)
@@ -68,6 +70,8 @@ func decompressorTest(suffix string, d writerhelper.Transformer) (err error) {
 	}
 
 	checkFilePath := path.Join("testdata", "test")
+
+	//nolint:gosec // checkFilePath refers to a test fixture selected by the test.
 	checkFile, err := os.Open(checkFilePath)
 	if err != nil {
 		return fmt.Errorf("open check file %s: %w", checkFilePath, err)

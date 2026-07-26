@@ -36,7 +36,7 @@ func mergedUsrSystem() (bool, error) {
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
 func getModData(modname string, fieldname string, kernelRelease string) ([]string, error) {
-	//nolint:noctx // Synchronous operation with no caller context.
+	//nolint:noctx,gosec // Synchronous operation; the executable is fixed and no shell is invoked.
 	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to call modinfo for module %q and kernel release %q: %w", modname, kernelRelease, err)
@@ -541,6 +541,7 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_
 		flags |= os.O_CREATE
 	}
 
+	//nolint:gosec // path is the image path intentionally constructed by fakemachine.
 	i, err := os.OpenFile(path, flags, 0o666)
 	if err != nil {
 		if size < 0 {
@@ -762,7 +763,7 @@ func (m *Machine) setupscratch() error {
 		return err
 	}
 
-	//nolint:noctx // Synchronous operation with no caller context.
+	//nolint:noctx,gosec // Synchronous operation; the executable is fixed and scratchfile is created internally.
 	mkfs := exec.Command("mkfs.ext4", "-q", m.scratchfile)
 	err = mkfs.Run()
 	if err != nil {
@@ -786,6 +787,7 @@ func (m *Machine) cleanup() error {
 }
 
 func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err error) {
+	//nolint:gosec // The generated initrd is intentionally executable.
 	f, err := os.OpenFile(m.initrdpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create initrd file: %w", err)
@@ -1075,6 +1077,8 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	// Set a default result of failure so that if the backend fails to start
 	// we get a defined exit code instead of an error reading the result file.
 	resultPath := path.Join(tmpdir, "result")
+
+	//nolint:gosec // The result file contains no sensitive data and is intentionally readable.
 	if err := os.WriteFile(resultPath, []byte("1"), 0o644); err != nil {
 		return -1, fmt.Errorf("failed to create result file: %w", err)
 	}
@@ -1087,6 +1091,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		return -1, fmt.Errorf("error starting %s backend: unknown error", m.backend.Name())
 	}
 
+	//nolint:gosec // resultPath is created internally inside the fakemachine runtime directory.
 	result, err := os.Open(resultPath)
 	if err != nil {
 		return -1, fmt.Errorf("failed to open result file: %w", err)

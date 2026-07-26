@@ -26,6 +26,7 @@ linters:
     - godot
     - godox
     - goprintffuncname
+    - gosec
     - govet
     - ineffassign
     - intrange
