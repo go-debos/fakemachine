@@ -83,7 +83,7 @@ func warnLocalhost(variable string, value string) {
 	}
 }
 
-func SetupVolumes(m *fakemachine.Machine, options Options) {
+func setupVolumes(m *fakemachine.Machine, options Options) {
 	for _, v := range options.Volumes {
 		parts := strings.Split(v, ":")
 
@@ -99,7 +99,7 @@ func SetupVolumes(m *fakemachine.Machine, options Options) {
 	}
 }
 
-func SetupImages(m *fakemachine.Machine, options Options) {
+func setupImages(m *fakemachine.Machine, options Options) {
 	for _, i := range options.Images {
 		parts := strings.Split(i, ":")
 		var err error
@@ -131,7 +131,7 @@ func SetupImages(m *fakemachine.Machine, options Options) {
 	}
 }
 
-func SetupEnviron(m *fakemachine.Machine, options Options) {
+func setupEnviron(m *fakemachine.Machine, options Options) {
 	// Initialize environment variables map
 	EnvironVars := make(map[string]string)
 
@@ -214,9 +214,9 @@ func main() {
 
 	m.SetShowBoot(options.ShowBoot)
 	m.SetQuiet(options.Quiet)
-	SetupVolumes(m, options)
-	SetupImages(m, options)
-	SetupEnviron(m, options)
+	setupVolumes(m, options)
+	setupImages(m, options)
+	setupEnviron(m, options)
 
 	if options.ScratchSize != "" {
 		size, err := units.FromHumanSize(options.ScratchSize)
