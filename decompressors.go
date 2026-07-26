@@ -23,6 +23,7 @@ func ZstdDecompressor(dst io.Writer, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to decompress zstd data: %w", err)
 	}
+
 	return nil
 }
 
@@ -40,6 +41,7 @@ func XzDecompressor(dst io.Writer, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to decompress xz data: %w", err)
 	}
+
 	return nil
 }
 
@@ -61,6 +63,7 @@ func GzipDecompressor(dst io.Writer, src io.Reader) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to decompress gzip data: %w", err)
 	}
+
 	return nil
 }
 
@@ -71,5 +74,6 @@ func NullDecompressor(dst io.Writer, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to copy uncompressed data: %w", err)
 	}
+
 	return nil
 }

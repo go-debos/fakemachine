@@ -85,6 +85,7 @@ func (w *WriterHelper) WriteDirectories(directories []WriteDirectory) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -108,6 +109,7 @@ func (w *WriterHelper) WriteDirectory(directory string, perm os.FileMode) error 
 	}
 
 	w.paths[directory] = true
+
 	return nil
 }
 
@@ -139,6 +141,7 @@ func (w *WriterHelper) WriteFileRaw(file string, bytes []byte, perm os.FileMode)
 	if err != nil {
 		return fmt.Errorf("failed to write file content: %w", err)
 	}
+
 	return nil
 }
 
@@ -151,6 +154,7 @@ func (w *WriterHelper) WriteSymlinks(links []WriteSymlink) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -180,6 +184,7 @@ func (w *WriterHelper) WriteSymlink(target, link string, perm os.FileMode) error
 	if err != nil {
 		return fmt.Errorf("failed to write symlink content: %w", err)
 	}
+
 	return nil
 }
 
@@ -202,6 +207,7 @@ func (w *WriterHelper) WriteCharDevice(device string, major, minor int64, perm o
 	if err != nil {
 		return fmt.Errorf("failed to write character device header: %w", err)
 	}
+
 	return nil
 }
 
@@ -229,6 +235,7 @@ func (w *WriterHelper) CopyTree(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to walk directory %s: %w", path, err)
 	}
+
 	return nil
 }
 

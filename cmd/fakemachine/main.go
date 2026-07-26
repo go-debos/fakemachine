@@ -202,6 +202,7 @@ func main() {
 			Version = determineVersionFromBuild()
 		}
 		fmt.Printf("fakemachine %v\n", Version)
+
 		return
 	}
 
