@@ -61,6 +61,7 @@ func getModData(modname string, fieldname string, kernelRelease string) ([]strin
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("failed to scan modinfo output for module %q: %w", modname, err)
 	}
+
 	return fieldValue, nil
 }
 
@@ -149,6 +150,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 				return fmt.Errorf("failed to transform module file %q: %w", modpath, err)
 			}
 			found = true
+
 			break
 		}
 	}
@@ -182,6 +184,7 @@ func realDir(path string) (string, error) {
 	if p, err = filepath.EvalSymlinks(p); err != nil {
 		return "", fmt.Errorf("failed to evaluate symlinks for %s: %w", p, err)
 	}
+
 	return filepath.Dir(p), nil
 }
 
@@ -203,6 +206,7 @@ func (m *Machine) addVolumeIfExists(volumePath string) error {
 	}
 
 	m.AddVolume(volumePath)
+
 	return nil
 }
 
@@ -344,12 +348,14 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 // InMachine reports whether the current process is running inside a fake machine.
 func InMachine() bool {
 	_, inMachine := os.LookupEnv("IN_FAKE_MACHINE")
+
 	return inMachine
 }
 
 // Supported reports whether the auto backend is supported on the current machine.
 func Supported() bool {
 	_, err := newBackend("auto", nil)
+
 	return err == nil
 }
 
@@ -449,6 +455,7 @@ func tmplMountVolume(b backend, m mountPoint) string {
 	}
 	mntCommand = append(mntCommand, m.label)
 	mntCommand = append(mntCommand, m.machineDirectory)
+
 	return strings.Join(mntCommand, " ")
 }
 
@@ -461,6 +468,7 @@ func tmplStaticVolumes(m Machine) []mountPoint {
 			mounts = append(mounts, mount)
 		}
 	}
+
 	return mounts
 }
 
@@ -481,6 +489,7 @@ func executeInitScriptTemplate(m *Machine, b backend) ([]byte, error) {
 	if err := tmpl.Execute(out, tmplVariables); err != nil {
 		return nil, fmt.Errorf("failed to execute init script template: %w", err)
 	}
+
 	return out.Bytes(), nil
 }
 
@@ -538,6 +547,7 @@ func (m *Machine) CreateImageWithLabel(path string, size int64, label string) (_
 		if size < 0 {
 			return "", fmt.Errorf("failed to open existing image file %s: %w", path, err)
 		}
+
 		return "", fmt.Errorf("failed to create image file %s: %w", path, err)
 	}
 	defer func() {
@@ -572,6 +582,7 @@ func diskSuffix(i int) string {
 	for ; i >= 0; i = (i/26 - 1) {
 		suffix = string(rune('a'+i%26)) + suffix
 	}
+
 	return suffix
 }
 
@@ -635,6 +646,7 @@ func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) e
 	if err != nil {
 		return fmt.Errorf("failed to write fstab: %w", err)
 	}
+
 	return nil
 }
 
@@ -646,6 +658,7 @@ func stripCompressionSuffix(module string) (string, error) {
 			return trimmed + ".ko", nil
 		}
 	}
+
 	return "", errors.New("module extension/suffix unknown")
 }
 
@@ -689,6 +702,7 @@ func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string
 	if err := w.WriteFile(path, strings.Join(output, "\n"), 0o644); err != nil {
 		return fmt.Errorf("failed to write modules.dep: %w", err)
 	}
+
 	return nil
 }
 
@@ -772,6 +786,7 @@ func (m *Machine) cleanup() error {
 	}
 
 	m.scratchfile = ""
+
 	return nil
 }
 

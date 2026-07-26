@@ -72,6 +72,7 @@ func (b qemuBackend) QemuPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to find qemu binary %s: %w", machine.binary, err)
 	}
+
 	return path, nil
 }
 
@@ -171,6 +172,7 @@ func (b qemuBackend) ModulePath() (string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("module directory not found at %s: %w", moddir, err)
 		}
+
 		return "", fmt.Errorf("stat %s: %w", moddir, err)
 	}
 
@@ -187,6 +189,7 @@ func (b qemuBackend) UdevRules() []string {
 			fmt.Sprintf(`KERNEL=="vd%s", SYMLINK+="disk/by-fakemachine-label/%s"`, suffix, img.label),
 			fmt.Sprintf(`KERNEL=="vd%s[0-9]*", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
 	}
+
 	return udevRules
 }
 
@@ -200,6 +203,7 @@ func (b qemuBackend) JobOutputTTY() string {
 	if b.machine.showBoot {
 		return "/dev/console"
 	}
+
 	return "/dev/hvc0"
 }
 
