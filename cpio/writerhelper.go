@@ -225,6 +225,7 @@ func (w *WriterHelper) CopyFileTo(src, dst string) (err error) {
 		return err
 	}
 
+	//nolint:gosec // src is an explicit input path that this method is expected to open.
 	f, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("open failed: %s - %w", src, err)
@@ -266,6 +267,7 @@ func (w *WriterHelper) TransformFileTo(src, dst string, fn Transformer) (err err
 		return err
 	}
 
+	//nolint:gosec // src is an explicit input path that this method is expected to transform.
 	f, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %w", src, err)

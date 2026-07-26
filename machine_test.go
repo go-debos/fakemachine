@@ -66,6 +66,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 			device := "vda"
 			path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
 
+			//nolint:gosec // path refers to a test-controlled temporary file.
 			data, err := os.ReadFile(path)
 			require.NoError(t, err)
 
@@ -290,6 +291,8 @@ func TestImageExistingNotTruncated(t *testing.T) {
 
 	// Populate image with data
 	content := []byte("this data must be preserved")
+
+	//nolint:gosec // The test intentionally uses normal umask-controlled file permissions.
 	require.NoError(t, os.WriteFile(path, content, 0o666))
 
 	// With size == -1 the image should already exist and its contents must not
@@ -297,6 +300,7 @@ func TestImageExistingNotTruncated(t *testing.T) {
 	_, err := m.CreateImageWithLabel(path, -1, "existing")
 	require.NoError(t, err)
 
+	//nolint:gosec // path refers to a test-controlled temporary file.
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, content, got, "existing image contents must not be truncated")

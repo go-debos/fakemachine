@@ -53,6 +53,7 @@ func GzipDecompressor(dst io.Writer, src io.Reader) (err error) {
 		}
 	}()
 
+	//nolint:gosec // Input images are trusted and may legitimately expand without a fixed size limit.
 	_, err = io.Copy(dst, decompressor)
 	if err != nil {
 		return fmt.Errorf("failed to decompress gzip data: %w", err)
