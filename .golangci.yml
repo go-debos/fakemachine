@@ -5,6 +5,7 @@ linters:
     - bodyclose
     - copyloopvar
     - cyclop
+    - depguard
     - dogsled
     - dupl
     - durationcheck
@@ -53,6 +54,20 @@ linters:
   settings:
     cyclop:
       max-complexity: 40
+    depguard:
+      rules:
+        main:
+          allow:
+            - $gostd
+            - al.essio.dev/pkg/shellescape
+            - github.com/docker/go-units
+            - github.com/go-debos/fakemachine
+            - github.com/jessevdk/go-flags
+            - github.com/klauspost/compress/zstd
+            - github.com/stretchr/testify
+            - github.com/surma/gocpio
+            - github.com/ulikunitz/xz
+            - golang.org/x/sys
     maintidx:
       under: 10
 formatters:
