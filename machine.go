@@ -64,7 +64,7 @@ func getModData(modname string, fieldname string, kernelRelease string) ([]strin
 	return fieldValue, nil
 }
 
-// Get full path of module
+// Get full path of module.
 func getModPath(modname string, kernelRelease string) (string, error) {
 	path, err := getModData(modname, "filename", kernelRelease)
 	if err != nil {
@@ -77,7 +77,7 @@ func getModPath(modname string, kernelRelease string) (string, error) {
 	return path[0], nil
 }
 
-// Get all dependent module
+// Get all dependent module.
 func getModDepends(modname string, kernelRelease string) ([]string, error) {
 	deplist, err := getModData(modname, "depends", kernelRelease)
 	if err != nil {
@@ -410,7 +410,7 @@ echo $? > /run/fakemachine/result
 `
 
 // The line 'Environment=%[2]s' is used for environment variables optionally
-// configured using Machine.SetEnviron()
+// configured using Machine.SetEnviron().
 const serviceTemplate = `
 [Unit]
 Description=fakemachine runner
@@ -438,7 +438,7 @@ SendSIGHUP=yes
 LimitNOFILE=4096
 `
 
-// helper function to generate a mount command for a given mountpoint
+// helper function to generate a mount command for a given mountpoint.
 func tmplMountVolume(b backend, m mountPoint) string {
 	fsType, options := b.MountParameters(m)
 
@@ -453,7 +453,7 @@ func tmplMountVolume(b backend, m mountPoint) string {
 }
 
 // helper function to return the static volumes from a machine, since the mounts variable is unexported
-// include the extra static mounts from the backend
+// include the extra static mounts from the backend.
 func tmplStaticVolumes(m Machine) []mountPoint {
 	mounts := []mountPoint{}
 	for _, mount := range append(m.mounts, m.backend.InitStaticVolumes()...) {
@@ -489,7 +489,7 @@ func (m *Machine) addStaticVolume(directory, label string) {
 }
 
 // AddVolumeAt mounts hostDirectory from the host at machineDirectory in the
-// fake machine
+// fake machine.
 func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 	label := fmt.Sprintf("virtfs-%d", m.count)
 	for _, mount := range m.mounts {
@@ -503,7 +503,7 @@ func (m *Machine) AddVolumeAt(hostDirectory, machineDirectory string) {
 }
 
 // AddVolume mounts directory from the host at the same location in the
-// fake machine
+// fake machine.
 func (m *Machine) AddVolume(directory string) {
 	m.AddVolumeAt(directory, directory)
 }
@@ -575,7 +575,7 @@ func diskSuffix(i int) string {
 }
 
 // SetMemory sets the fakemachines amount of memory (in megabytes). Defaults to
-// 2048 MB
+// 2048 MB.
 func (m *Machine) SetMemory(memory int) {
 	m.memory = memory
 }
@@ -587,7 +587,7 @@ func (m *Machine) SetNumCPUs(numcpus int) {
 }
 
 // SetSectorSize overrides the default sector size(512 bytes) for the image
-// exposed to the fakemachine
+// exposed to the fakemachine.
 func (m *Machine) SetSectorSize(sectorSize int) {
 	m.sectorSize = sectorSize
 }
@@ -606,7 +606,7 @@ func (m *Machine) SetQuiet(quiet bool) {
 
 // SetScratch sets the size and location of on-disk scratch space to allocate
 // (sparsely) for /scratch. If not set /scratch will be backed by memory. If
-// Path is "" then the working directory is used as a default storage location
+// Path is "" then the working directory is used as a default storage location.
 func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchsize = scratchsize
 	m.scratchpath = path
@@ -1000,7 +1000,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 }
 
 // Start the machine running the given command and adding the extra content to
-// the cpio. Extracontent is a list of {source, dest} tuples
+// the cpio. Extracontent is a list of {source, dest} tuples.
 func (m *Machine) startup(command string, extracontent [][2]string) (code int, err error) {
 	defer func() {
 		if cleanupErr := m.cleanup(); cleanupErr != nil {
@@ -1096,13 +1096,13 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	return exitcode, nil
 }
 
-// Run creates the machine running the given command
+// Run creates the machine running the given command.
 func (m *Machine) Run(command string) (int, error) {
 	return m.startup(command, nil)
 }
 
 // RunInMachineWithArgs runs the caller binary inside the fakemachine with the
-// specified commandline arguments
+// specified commandline arguments.
 func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 	name := path.Join("/", path.Base(os.Args[0]))
 
@@ -1118,7 +1118,7 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 }
 
 // RunInMachine runs the caller binary inside the fakemachine with the same
-// commandline arguments as the parent
+// commandline arguments as the parent.
 func (m *Machine) RunInMachine() (int, error) {
 	return m.RunInMachineWithArgs(os.Args[1:])
 }
