@@ -351,10 +351,9 @@ func NewMachineWithBackend(backendName string) (*Machine, error) {
 
 // InMachine reports whether the current process is running inside a
 // fakemachine, based on the IN_FAKE_MACHINE environment variable.
-func InMachine() (ret bool) {
-	_, ret = os.LookupEnv("IN_FAKE_MACHINE")
-
-	return
+func InMachine() bool {
+	_, inMachine := os.LookupEnv("IN_FAKE_MACHINE")
+	return inMachine
 }
 
 // Supported reports whether any backend can be used on this host.
@@ -1012,6 +1011,8 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 
 // Start the machine running the given command and adding the extra content to
 // the cpio. Extracontent is a list of {source, dest} tuples.
+//
+//nolint:nonamedreturns // Named err allows deferred cleanup errors to amend the returned error.
 func (m *Machine) startup(command string, extracontent [][2]string) (code int, err error) {
 	defer func() {
 		if cleanupErr := m.cleanup(); cleanupErr != nil {
