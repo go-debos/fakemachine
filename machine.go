@@ -611,7 +611,7 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchpath = path
 }
 
-func (m Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
+func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
 	if m.scratchfile == "" {

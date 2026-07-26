@@ -42,6 +42,7 @@ linters:
     - nonamedreturns
     - predeclared
     - reassign
+    - recvcheck
     - revive
     - staticcheck
     - testableexamples
