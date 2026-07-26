@@ -20,6 +20,7 @@ linters:
     - fatcontext
     - forcetypeassert
     - gocheckcompilerdirectives
+    - gochecknoinits
     - gocritic
     - godoclint
     - godot

@@ -18,6 +18,7 @@ var (
 	testArg     string
 )
 
+//nolint:gochecknoinits // Injects additional command-line flags to unit tests.
 func init() {
 	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
 	flag.StringVar(&testArg, "testarg", "", "Test specific argument")
