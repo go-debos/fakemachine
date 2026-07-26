@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -102,10 +103,10 @@ func (b qemuBackend) KernelRelease() (string, error) {
 		return "", fmt.Errorf("listing /lib/modules: %w", err)
 	}
 
-	for i := len(files) - 1; i >= 0; i-- {
+	for _, v := range slices.Backward(files) {
 		/* Ensure the kernel name starts with a digit, in order
 		 * to filter out 'extramodules-ARCH' on ArchLinux */
-		filename := files[i].Name()
+		filename := v.Name()
 		if len(filename) > 0 && filename[0] >= '0' && filename[0] <= '9' {
 			return filename, nil
 		}

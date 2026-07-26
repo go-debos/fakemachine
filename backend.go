@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Package fakemachine runs commands inside a minimal virtual machine that
 // boots the host's kernel and shares the host's /usr, so tools that need root
