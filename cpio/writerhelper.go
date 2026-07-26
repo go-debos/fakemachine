@@ -17,8 +17,9 @@ import (
 // WriterHelper wraps a cpio.Writer and tracks written paths to automatically
 // create parent directories as needed.
 type WriterHelper struct {
-	paths map[string]bool
 	*cpio.Writer
+
+	paths map[string]bool
 }
 
 // WriteDirectory describes a directory entry to add to the archive.
