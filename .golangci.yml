@@ -24,6 +24,7 @@ linters:
     - govet
     - ineffassign
     - intrange
+    - maintidx
     - makezero
     - mirror
     - misspell
@@ -52,6 +53,8 @@ linters:
   settings:
     cyclop:
       max-complexity: 40
+    maintidx:
+      under: 10
 formatters:
   enable:
     - gofumpt
