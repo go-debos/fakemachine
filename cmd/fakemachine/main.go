@@ -81,7 +81,7 @@ func warnLocalhost(variable string, value string) {
 	}
 }
 
-func setupVolumes(m *fakemachine.Machine, options Options) {
+func setupVolumes(m *fakemachine.Machine, options Options) error {
 	for _, v := range options.Volumes {
 		parts := strings.Split(v, ":")
 
@@ -91,13 +91,14 @@ func setupVolumes(m *fakemachine.Machine, options Options) {
 		case 2:
 			m.AddVolumeAt(parts[0], parts[1])
 		default:
-			fmt.Fprintln(os.Stderr, "Failed to parse volume:", v)
-			os.Exit(1)
+			return fmt.Errorf("failed to parse volume: %s", v)
 		}
 	}
+
+	return nil
 }
 
-func setupImages(m *fakemachine.Machine, options Options) {
+func setupImages(m *fakemachine.Machine, options Options) error {
 	for _, i := range options.Images {
 		parts := strings.Split(i, ":")
 		var err error
@@ -114,19 +115,19 @@ func setupImages(m *fakemachine.Machine, options Options) {
 			}
 			l, err = m.CreateImage(parts[0], size)
 		default:
-			fmt.Fprintf(os.Stderr, "Failed to parse image: %s\n", i)
-			os.Exit(1)
+			return fmt.Errorf("failed to parse image: %s", i)
 		}
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create image: %s %v\n", i, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create image %s: %w", i, err)
 		}
 
 		if !options.Quiet {
 			fmt.Printf("Exposing %s as %s\n", parts[0], l)
 		}
 	}
+
+	return nil
 }
 
 func setupEnviron(m *fakemachine.Machine, options Options) {
@@ -212,8 +213,16 @@ func main() {
 
 	m.SetShowBoot(options.ShowBoot)
 	m.SetQuiet(options.Quiet)
-	setupVolumes(m, options)
-	setupImages(m, options)
+	if err := setupVolumes(m, options); err != nil {
+		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := setupImages(m, options); err != nil {
+		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
+		os.Exit(1)
+	}
+
 	setupEnviron(m, options)
 
 	if options.ScratchSize != "" {
