@@ -180,6 +180,59 @@ func setupEnviron(m *fakemachine.Machine, options Options) {
 	m.SetEnviron(EnvironString) // And save the resulting environ vars on m
 }
 
+// createFakemachine creates a machine and configures it from the given options.
+func createFakemachine(options Options) (*fakemachine.Machine, error) {
+	m, err := fakemachine.NewMachineWithBackend(options.Backend)
+	if err != nil {
+		//nolint:wrapcheck
+		return nil, err
+	}
+
+	m.SetShowBoot(options.ShowBoot)
+	m.SetQuiet(options.Quiet)
+
+	if err := setupVolumes(m, options); err != nil {
+		return nil, err
+	}
+
+	if err := setupImages(m, options); err != nil {
+		return nil, err
+	}
+
+	setupEnviron(m, options)
+
+	if options.ScratchSize != "" {
+		size, err := units.FromHumanSize(options.ScratchSize)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't parse --scratchsize %q: %w", options.ScratchSize, err)
+		}
+
+		// Use the current working directory as the default scratch file location
+		m.SetScratch(size, "")
+	}
+
+	// Parse memory
+	memsize, err := units.RAMInBytes(options.Memory)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't parse --memory %q: %w", options.Memory, err)
+	}
+	memsizeMB := int(memsize / 1024 / 1024)
+	if memsizeMB < 256 {
+		fmt.Printf("WARNING: Memory size of %dMB is less than recommended minimum 256MB\n", memsizeMB)
+	}
+	m.SetMemory(memsizeMB)
+
+	if options.CPUs > 0 {
+		m.SetNumCPUs(options.CPUs)
+	}
+
+	if options.SectorSize > 0 {
+		m.SetSectorSize(options.SectorSize)
+	}
+
+	return m, nil
+}
+
 func main() {
 	// append the list of available backends to the commandline argument parser
 	opt := parser.FindOptionByLongName("backend")
@@ -205,55 +258,10 @@ func main() {
 		return
 	}
 
-	m, err := fakemachine.NewMachineWithBackend(options.Backend)
+	m, err := createFakemachine(options)
 	if err != nil {
-		fmt.Printf("fakemachine: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fakemachine: couldn't create machine: %v\n", err)
 		os.Exit(1)
-	}
-
-	m.SetShowBoot(options.ShowBoot)
-	m.SetQuiet(options.Quiet)
-	if err := setupVolumes(m, options); err != nil {
-		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := setupImages(m, options); err != nil {
-		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
-		os.Exit(1)
-	}
-
-	setupEnviron(m, options)
-
-	if options.ScratchSize != "" {
-		size, err := units.FromHumanSize(options.ScratchSize)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse scratch size: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Use the current working directory as the default scratch file location
-		m.SetScratch(size, "")
-	}
-
-	// Parse memory
-	memsize, err := units.RAMInBytes(options.Memory)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse --memory %q: %v\n", options.Memory, err)
-		os.Exit(1)
-	}
-	memsizeMB := int(memsize / 1024 / 1024)
-	if memsizeMB < 256 {
-		fmt.Printf("WARNING: Memory size of %dMB is less than recommended minimum 256MB\n", memsizeMB)
-	}
-	m.SetMemory(memsizeMB)
-
-	if options.CPUs > 0 {
-		m.SetNumCPUs(options.CPUs)
-	}
-
-	if options.SectorSize > 0 {
-		m.SetSectorSize(options.SectorSize)
 	}
 
 	command := "/bin/bash"
@@ -263,7 +271,7 @@ func main() {
 
 	ret, err := m.Run(command)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fakemachine: couldn't run machine: %v\n", err)
 	}
 	os.Exit(ret)
 }
