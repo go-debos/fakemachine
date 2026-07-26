@@ -100,24 +100,24 @@ func setupVolumes(m *fakemachine.Machine, options Options) error {
 
 func setupImages(m *fakemachine.Machine, options Options) error {
 	for _, i := range options.Images {
-		parts := strings.Split(i, ":")
-		var err error
-		var l string
+		size := int64(-1)
 
+		// Images are specified as "path[:size]"
+		// without a size the image file is expected to already exist
+		parts := strings.Split(i, ":")
 		switch len(parts) {
 		case 1:
-			l, err = m.CreateImage(parts[0], -1)
 		case 2:
-			var size int64
+			var err error
 			size, err = units.FromHumanSize(parts[1])
 			if err != nil {
-				break
+				return fmt.Errorf("couldn't parse size %q of image %s: %w", parts[1], parts[0], err)
 			}
-			l, err = m.CreateImage(parts[0], size)
 		default:
-			return fmt.Errorf("failed to parse image: %s", i)
+			return fmt.Errorf("failed to parse image argument: %s", i)
 		}
 
+		l, err := m.CreateImage(parts[0], size)
 		if err != nil {
 			return fmt.Errorf("failed to create image %s: %w", i, err)
 		}
