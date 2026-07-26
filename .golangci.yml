@@ -1,66 +1,30 @@
 version: "2"
 linters:
-  enable:
-    - asasalint
-    - bodyclose
-    - copyloopvar
-    - cyclop
-    - depguard
-    - dogsled
-    - dupl
-    - dupword
-    - durationcheck
-    - embeddedstructfieldcheck
-    - errcheck
-    - errchkjson
-    - errname
-    - errorlint
-    - exhaustive
-    - exptostd
-    - fatcontext
-    - forcetypeassert
-    - gocheckcompilerdirectives
-    - gochecknoinits
-    - gocritic
-    - godoclint
-    - godot
-    - godox
-    - goprintffuncname
-    - gosec
-    - govet
-    - ineffassign
-    - intrange
-    - maintidx
-    - makezero
-    - mirror
-    - misspell
-    - modernize
-    - nakedret
-    - nestif
-    - nilerr
-    - nilnesserr
-    - nilnil
-    - nlreturn
-    - noctx
-    - nolintlint
-    - nonamedreturns
-    - predeclared
-    - reassign
-    - recvcheck
-    - revive
-    - staticcheck
-    - testableexamples
-    - testifylint
-    - thelper
-    - tparallel
-    - unconvert
-    - unparam
-    - unused
-    - usestdlibvars
-    - usetesting
-    - wastedassign
-    - whitespace
-    - wrapcheck
+  default: all
+  disable:
+    - err113            # Not every error needs a sentinel value.
+    - exhaustruct       # Zero values are useful and listing every field adds noise.
+    - forbidigo         # Fakemachine is a command-line tool and needs to print output.
+    - funcorder         # Function order is mostly personal preference.
+    - funlen            # Long functions are not always hard to read.
+    - gochecknoglobals  # Some globals, such as lookup tables, are fine.
+    - gocognit          # The complexity score is not always useful for real code.
+    - goconst           # Turning repeated test strings into constants can make tests less clear.
+    - gocyclo           # Replaced by cyclop.
+    - gomodguard        # Replaced by gomodguard_v2.
+    - interfacebloat    # The backend interface is still clear and belongs together.
+    - ireturn           # Backend factory functions are expected to return interfaces.
+    - lll               # Some struct tags and command arguments cannot be wrapped neatly.
+    - mnd               # File modes, sizes and device numbers are often clearer as literals.
+    - noinlineerr       # Inline error checks are normal Go style.
+    - paralleltest      # Fakemachine tests use shared resources and should not run in parallel.
+    - perfsprint        # The string conversions are not performance-sensitive.
+    - prealloc          # The slices are small; preallocation is not needed.
+    - tagalign          # Reordering struct tags adds no real value.
+    - testpackage       # Tests need access to private implementation details.
+    - varnamelen        # Short variable names are fine.
+    - wsl               # Replaced by wsl_v5.
+    - wsl_v5            # The whitespace rules are too strict for this project.
   settings:
     cyclop:
       max-complexity: 40
