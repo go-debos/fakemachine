@@ -1,15 +1,18 @@
+// Package main is the entry point for the fakemachine command-line tool.
 package main
 
 import (
-	"al.essio.dev/pkg/shellescape"
 	"errors"
 	"fmt"
-	"github.com/docker/go-units"
-	"github.com/go-debos/fakemachine"
-	"github.com/jessevdk/go-flags"
 	"os"
 	"runtime/debug"
 	"strings"
+
+	"al.essio.dev/pkg/shellescape"
+
+	"github.com/docker/go-units"
+	"github.com/go-debos/fakemachine"
+	"github.com/jessevdk/go-flags"
 )
 
 var Version string
@@ -28,8 +31,10 @@ type Options struct {
 	Version     bool              `long:"version" description:"Print fakemachine version"`
 }
 
-var options Options
-var parser = flags.NewParser(&options, flags.Default)
+var (
+	options Options
+	parser  = flags.NewParser(&options, flags.Default)
+)
 
 func determineVersionFromBuild() string {
 	info, ok := debug.ReadBuildInfo()
@@ -76,7 +81,7 @@ func warnLocalhost(variable string, value string) {
 	}
 }
 
-func SetupVolumes(m *fakemachine.Machine, options Options) {
+func setupVolumes(m *fakemachine.Machine, options Options) error {
 	for _, v := range options.Volumes {
 		parts := strings.Split(v, ":")
 
@@ -86,52 +91,53 @@ func SetupVolumes(m *fakemachine.Machine, options Options) {
 		case 2:
 			m.AddVolumeAt(parts[0], parts[1])
 		default:
-			fmt.Fprintln(os.Stderr, "Failed to parse volume:", v)
-			os.Exit(1)
+			return fmt.Errorf("failed to parse volume: %s", v)
 		}
 	}
+
+	return nil
 }
 
-func SetupImages(m *fakemachine.Machine, options Options) {
+func setupImages(m *fakemachine.Machine, options Options) error {
 	for _, i := range options.Images {
-		parts := strings.Split(i, ":")
-		var err error
-		var l string
+		size := int64(-1)
 
+		// Images are specified as "path[:size]"
+		// without a size the image file is expected to already exist
+		parts := strings.Split(i, ":")
 		switch len(parts) {
 		case 1:
-			l, err = m.CreateImage(parts[0], -1)
 		case 2:
-			var size int64
+			var err error
 			size, err = units.FromHumanSize(parts[1])
 			if err != nil {
-				break
+				return fmt.Errorf("couldn't parse size %q of image %s: %w", parts[1], parts[0], err)
 			}
-			l, err = m.CreateImage(parts[0], size)
 		default:
-			fmt.Fprintf(os.Stderr, "Failed to parse image: %s\n", i)
-			os.Exit(1)
+			return fmt.Errorf("failed to parse image argument: %s", i)
 		}
 
+		l, err := m.CreateImage(parts[0], size)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create image: %s %v\n", i, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create image %s: %w", i, err)
 		}
 
 		if !options.Quiet {
 			fmt.Printf("Exposing %s as %s\n", parts[0], l)
 		}
 	}
+
+	return nil
 }
 
-func SetupEnviron(m *fakemachine.Machine, options Options) {
+func setupEnviron(m *fakemachine.Machine, options Options) {
 	// Initialize environment variables map
 	EnvironVars := make(map[string]string)
 
 	// These are the environment variables that will be detected on the
 	// host and propagated to fakemachine. These are listed lower case, but
 	// they are detected and configured in both lower case and upper case.
-	var environVars = [...]string{
+	environVars := [...]string{
 		"http_proxy",
 		"https_proxy",
 		"ftp_proxy",
@@ -174,6 +180,59 @@ func SetupEnviron(m *fakemachine.Machine, options Options) {
 	m.SetEnviron(EnvironString) // And save the resulting environ vars on m
 }
 
+// createFakemachine creates a machine and configures it from the given options.
+func createFakemachine(options Options) (*fakemachine.Machine, error) {
+	m, err := fakemachine.NewMachineWithBackend(options.Backend)
+	if err != nil {
+		//nolint:wrapcheck
+		return nil, err
+	}
+
+	m.SetShowBoot(options.ShowBoot)
+	m.SetQuiet(options.Quiet)
+
+	if err := setupVolumes(m, options); err != nil {
+		return nil, err
+	}
+
+	if err := setupImages(m, options); err != nil {
+		return nil, err
+	}
+
+	setupEnviron(m, options)
+
+	if options.ScratchSize != "" {
+		size, err := units.FromHumanSize(options.ScratchSize)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't parse --scratchsize %q: %w", options.ScratchSize, err)
+		}
+
+		// Use the current working directory as the default scratch file location
+		m.SetScratch(size, "")
+	}
+
+	// Parse memory
+	memsize, err := units.RAMInBytes(options.Memory)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't parse --memory %q: %w", options.Memory, err)
+	}
+	memsizeMB := int(memsize / 1024 / 1024)
+	if memsizeMB < 256 {
+		fmt.Printf("WARNING: Memory size of %dMB is less than recommended minimum 256MB\n", memsizeMB)
+	}
+	m.SetMemory(memsizeMB)
+
+	if options.CPUs > 0 {
+		m.SetNumCPUs(options.CPUs)
+	}
+
+	if options.SectorSize > 0 {
+		m.SetSectorSize(options.SectorSize)
+	}
+
+	return m, nil
+}
+
 func main() {
 	// append the list of available backends to the commandline argument parser
 	opt := parser.FindOptionByLongName("backend")
@@ -195,50 +254,14 @@ func main() {
 			Version = determineVersionFromBuild()
 		}
 		fmt.Printf("fakemachine %v\n", Version)
+
 		return
 	}
 
-	m, err := fakemachine.NewMachineWithBackend(options.Backend)
+	m, err := createFakemachine(options)
 	if err != nil {
-		fmt.Printf("fakemachine: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fakemachine: couldn't create machine: %v\n", err)
 		os.Exit(1)
-	}
-
-	m.SetShowBoot(options.ShowBoot)
-	m.SetQuiet(options.Quiet)
-	SetupVolumes(m, options)
-	SetupImages(m, options)
-	SetupEnviron(m, options)
-
-	if options.ScratchSize != "" {
-		size, err := units.FromHumanSize(options.ScratchSize)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse scratch size: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Use the current working directory as the default scratch file location
-		m.SetScratch(size, "")
-	}
-
-	// Parse memory
-	memsize, err := units.RAMInBytes(options.Memory)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fakemachine: Couldn't parse --memory %q: %v\n", options.Memory, err)
-		os.Exit(1)
-	}
-	memsizeMB := int(memsize / 1024 / 1024)
-	if memsizeMB < 256 {
-		fmt.Printf("WARNING: Memory size of %dMB is less than recommended minimum 256MB\n", memsizeMB)
-	}
-	m.SetMemory(memsizeMB)
-
-	if options.CPUs > 0 {
-		m.SetNumCPUs(options.CPUs)
-	}
-
-	if options.SectorSize > 0 {
-		m.SetSectorSize(options.SectorSize)
 	}
 
 	command := "/bin/bash"
@@ -248,7 +271,7 @@ func main() {
 
 	ret, err := m.Run(command)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fakemachine: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fakemachine: couldn't run machine: %v\n", err)
 	}
 	os.Exit(ret)
 }

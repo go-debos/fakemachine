@@ -1,13 +1,14 @@
 //go:build linux
-// +build linux
 
+// Package fakemachine provides a lightweight virtual machine abstraction for
+// running commands in an isolated environment.
 package fakemachine
 
 import (
 	"fmt"
 )
 
-// List of backends in order of their priority in the "auto" algorithm
+// List of backends in order of their priority in the "auto" algorithm.
 func implementedBackends(m *Machine) []backend {
 	return []backend{
 		newKvmBackend(m),
@@ -15,9 +16,8 @@ func implementedBackends(m *Machine) []backend {
 	}
 }
 
-/* A list of backends which are implemented - sorted in order in which the
- * "auto" backend chooses them.
- */
+// BackendNames returns the list of implemented backends sorted in order of
+// preference for the "auto" selection algorithm, with "auto" prepended.
 func BackendNames() []string {
 	names := []string{"auto"}
 
@@ -54,10 +54,13 @@ func newBackend(name string, m *Machine) (backend, error) {
 				} else {
 					err = backendErr
 				}
+
 				continue
 			}
+
 			return b, nil
 		}
+
 		return nil, err
 	}
 
