@@ -53,9 +53,9 @@ jobs:
         # See https://github.com/actions/runner-images/issues/183
         os:
           - arch
-          - debian-trixie
-          - debian-forky
-          - ubuntu-questing
+          - debian-stable
+          - debian-testing
+          - ubuntu-devel
           - fedora-latest
         backend:
           - qemu
@@ -66,7 +66,7 @@ jobs:
       run:
         shell: bash
     container:
-      image: ghcr.io/go-debos/test-containers/${{matrix.os}}:main
+      image: ghcr.io/go-debos/test-containers/${{matrix.os}}:wip-obbardc-small-cleanups
       options: >-
         --security-opt label=disable
         --cap-add=SYS_PTRACE
