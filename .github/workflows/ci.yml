@@ -96,6 +96,40 @@ jobs:
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
 
+  test-name-resolution-without-resolved:
+    # fakemachine should work on hosts without systemd-resolved, falling back to
+    # generating /etc/resolv.conf from the DHCP lease. Uninstall systemd-resolved
+    # and check name resolution still works.
+    name: Test name resolution without systemd-resolved
+    runs-on: 'ubuntu-latest'
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/go-debos/test-containers/debian-trixie:main
+      options: >-
+        --security-opt label=disable
+        --cap-add=SYS_PTRACE
+        --tmpfs /scratch:exec
+    env:
+      TMP: /scratch
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        filter: tree:0
+
+    - name: Set safe directory in container
+      run: /usr/bin/git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
+    - name: Uninstall systemd-resolved
+      run: |
+        apt-get remove -y systemd-resolved
+
+    - name: Run DNS resolution test (qemu backend)
+      run: go test -v -run TestNetworkDNS ./... --backend=qemu | tee test.out
+
   build-container:
     name: Build Docker container
     runs-on: ubuntu-latest
