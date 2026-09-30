@@ -4,7 +4,21 @@
 .SH NAME
 fakemachine \- fake a machine
 .PP
-Creates a virtual machine based on the currently running system.
+fakemachine creates a virtual machine derived from the current root
+filesystem and allows the user to run commands inside it.
+.PP
+It is provided as a standalone executable as well as a Go library and is
+primarily used by \c
+.UR https://github.com/go-debos/debos
+debos
+.UE \c
+\ to execute image build actions inside a VM.
+This gives stronger isolation than chroot and allows unprivileged users
+to perform operations that would normally require root on the host, such
+as mounting filesystem images.
+.PP
+If fakemachine is ran inside a container, the virtual machine\(cqs root
+filesystem is derived from the container\(cqs root filesystem.
 .SH SYNOPSIS
 .IP
 .EX
