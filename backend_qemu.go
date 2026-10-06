@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -71,6 +72,7 @@ func (b qemuBackend) QemuPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to find qemu binary %s: %w", machine.binary, err)
 	}
+
 	return path, nil
 }
 
@@ -102,10 +104,10 @@ func (b qemuBackend) KernelRelease() (string, error) {
 		return "", fmt.Errorf("listing /lib/modules: %w", err)
 	}
 
-	for i := len(files) - 1; i >= 0; i-- {
+	for _, v := range slices.Backward(files) {
 		/* Ensure the kernel name starts with a digit, in order
 		 * to filter out 'extramodules-ARCH' on ArchLinux */
-		filename := files[i].Name()
+		filename := v.Name()
 		if len(filename) > 0 && filename[0] >= '0' && filename[0] <= '9' {
 			return filename, nil
 		}
@@ -170,6 +172,7 @@ func (b qemuBackend) ModulePath() (string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("module directory not found at %s: %w", moddir, err)
 		}
+
 		return "", fmt.Errorf("stat %s: %w", moddir, err)
 	}
 
@@ -186,6 +189,7 @@ func (b qemuBackend) UdevRules() []string {
 			fmt.Sprintf(`KERNEL=="vd%s", SYMLINK+="disk/by-fakemachine-label/%s"`, suffix, img.label),
 			fmt.Sprintf(`KERNEL=="vd%s[0-9]*", SYMLINK+="disk/by-fakemachine-label/%s-part%%n"`, suffix, img.label))
 	}
+
 	return udevRules
 }
 
@@ -199,6 +203,7 @@ func (b qemuBackend) JobOutputTTY() string {
 	if b.machine.showBoot {
 		return "/dev/console"
 	}
+
 	return "/dev/hvc0"
 }
 
@@ -228,14 +233,16 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
-	qemuargs := []string{qemuMachine.binary,
+	qemuargs := []string{
+		qemuMachine.binary,
 		"-smp", numcpus,
 		"-m", memory,
 		"-kernel", kernelPath,
 		"-initrd", m.initrdpath,
 		"-display", "none",
 		"-nic", "user,model=virtio-net-pci",
-		"-no-reboot"}
+		"-no-reboot",
+	}
 
 	if kvm {
 		qemuargs = append(qemuargs,
@@ -247,9 +254,11 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 
 	qemuargs = append(qemuargs, "-machine", qemuMachine.machine)
 	console := fmt.Sprintf("console=%s", qemuMachine.console)
-	kernelargs := []string{console, "panic=-1",
+	kernelargs := []string{
+		console, "panic=-1",
 		"plymouth.enable=0",
-		"systemd.unit=fakemachine.service"}
+		"systemd.unit=fakemachine.service",
+	}
 
 	if m.showBoot {
 		// Create a character device representing our stdio

@@ -13,15 +13,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var backendName string
-var testArg string
+var (
+	backendName string
+	testArg     string
+)
 
+//nolint:gochecknoinits // Injects additional command-line flags to unit tests.
 func init() {
 	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
 	flag.StringVar(&testArg, "testarg", "", "Test specific argument")
 }
 
 func CreateMachine(t *testing.T) *Machine {
+	t.Helper()
 	machine, err := NewMachineWithBackend(backendName)
 	require.NoError(t, err)
 	machine.SetNumCPUs(2)
@@ -62,6 +66,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 			device := "vda"
 			path := "/sys/block/" + device + "/queue/" + bstype + "_block_size"
 
+			//nolint:gosec // path refers to a test-controlled temporary file.
 			data, err := os.ReadFile(path)
 			require.NoError(t, err)
 
@@ -70,6 +75,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 
 			require.Equal(t, sectorsize, sz)
 		}
+
 		return
 	}
 
@@ -102,6 +108,7 @@ func TestImage4kSectorSize(t *testing.T) {
 }
 
 func AssertMount(t *testing.T, mountpoint, fstype string) {
+	t.Helper()
 	m, err := os.Open("/proc/self/mounts")
 	require.NoError(t, err)
 	defer func() {
@@ -114,6 +121,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 		line, err := mtab.ReadString('\n')
 		if err == io.EOF {
 			require.Fail(t, "mountpoint not found")
+
 			break
 		}
 		require.NoError(t, err)
@@ -121,6 +129,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 		fields := strings.Fields(line)
 		if fields[1] == mountpoint {
 			require.Equal(t, fstype, fields[2])
+
 			return
 		}
 	}
@@ -129,6 +138,7 @@ func AssertMount(t *testing.T, mountpoint, fstype string) {
 func TestScratchTmp(t *testing.T) {
 	if InMachine() {
 		AssertMount(t, "/scratch", "tmpfs")
+
 		return
 	}
 
@@ -142,6 +152,7 @@ func TestScratchTmp(t *testing.T) {
 func TestScratchDisk(t *testing.T) {
 	if InMachine() {
 		AssertMount(t, "/scratch", "ext4")
+
 		return
 	}
 
@@ -175,6 +186,7 @@ fi
 func TestSpawnMachine(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
+
 		return
 	}
 
@@ -189,7 +201,7 @@ func TestImageLabel(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
 		devices := flag.Args()
-		require.Equal(t, 2, len(devices), "Only expected two devices")
+		require.Len(t, devices, 2, "Only expected two devices")
 
 		autolabel := devices[0]
 		labeled := devices[1]
@@ -220,6 +232,7 @@ func TestImageLabel(t *testing.T) {
 func TestVolumes(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
+
 		return
 	}
 
@@ -253,9 +266,15 @@ func TestDiskSuffix(t *testing.T) {
 		i    int
 		want string
 	}{
-		{0, "a"}, {1, "b"}, {25, "z"},
-		{26, "aa"}, {27, "ab"}, {51, "az"},
-		{52, "ba"}, {701, "zz"}, {702, "aaa"},
+		{0, "a"},
+		{1, "b"},
+		{25, "z"},
+		{26, "aa"},
+		{27, "ab"},
+		{51, "az"},
+		{52, "ba"},
+		{701, "zz"},
+		{702, "aaa"},
 	}
 	for _, c := range cases {
 		require.Equal(t, c.want, diskSuffix(c.i), "diskSuffix(%d)", c.i)
@@ -279,13 +298,16 @@ func TestImageExistingNotTruncated(t *testing.T) {
 
 	// Populate image with data
 	content := []byte("this data must be preserved")
-	require.NoError(t, os.WriteFile(path, content, 0666))
+
+	//nolint:gosec // The test intentionally uses normal umask-controlled file permissions.
+	require.NoError(t, os.WriteFile(path, content, 0o666))
 
 	// With size == -1 the image should already exist and its contents must not
 	// be modified
 	_, err := m.CreateImageWithLabel(path, -1, "existing")
 	require.NoError(t, err)
 
+	//nolint:gosec // path refers to a test-controlled temporary file.
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, content, got, "existing image contents must not be truncated")
@@ -296,13 +318,15 @@ func TestCommandEscaping(t *testing.T) {
 		t.Log("Running in the machine")
 		require.Equal(t, "$s'n\\akes", testArg)
 		t.Log(testArg)
+
 		return
 	}
 
 	m := CreateMachine(t)
 	exitcode, err := m.RunInMachineWithArgs([]string{
 		"-test.v", "-test.run",
-		"TestCommandEscaping", "-testarg", "$s'n\\akes"})
+		"TestCommandEscaping", "-testarg", "$s'n\\akes",
+	})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
 }
