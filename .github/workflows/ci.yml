@@ -97,6 +97,10 @@ jobs:
     - name: Print fakemachine version
       run: ./fakemachine --version
 
+    - name: Install pivot_root for the unshare backend
+      if: matrix.backend == 'unshare' && (startsWith(matrix.os, 'debian') || startsWith(matrix.os, 'ubuntu'))
+      run: apt-get update && apt-get install -y --no-install-recommends util-linux-extra
+
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
 

@@ -76,9 +76,9 @@ func unshareProbe(unshare string) ([]string, error) {
 			if err == nil {
 				unshareIdMap.args = args
 				if len(idmap) == 1 {
-					fmt.Fprintln(os.Stderr, "Warning: unshare backend can't map subordinate ids "+
+					fmt.Fprintf(os.Stderr, "Warning: unshare backend can't map subordinate ids "+
 						"(needs newuidmap/newgidmap and /etc/subuid and /etc/subgid entries); only "+
-						"root is mapped so chown to other users will fail")
+						"root is mapped so chown to other users will fail: %s\n", strings.Join(errs, "; "))
 				}
 				return
 			}
@@ -96,6 +96,12 @@ func (b unshareBackend) Supported() (bool, error) {
 	unshare, err := exec.LookPath("unshare")
 	if err != nil {
 		return false, fmt.Errorf("failed to find unshare binary (util-linux): %w", err)
+	}
+
+	// Shipped in util-linux-extra on Debian and Ubuntu
+	if _, err := exec.LookPath("pivot_root"); err != nil {
+		return false, fmt.Errorf("failed to find pivot_root binary (util-linux, or "+
+			"util-linux-extra on Debian/Ubuntu): %w", err)
 	}
 
 	if _, err := unshareProbe(unshare); err != nil {
