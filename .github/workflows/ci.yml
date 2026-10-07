@@ -97,9 +97,11 @@ jobs:
     - name: Print fakemachine version
       run: ./fakemachine --version
 
-    - name: Install pivot_root for the unshare backend
+    # pivot_root and newuidmap/newgidmap are in separate packages on Debian and
+    # Ubuntu; Arch and Fedora ship them in util-linux and shadow(-utils)
+    - name: Install unshare backend dependencies
       if: matrix.backend == 'unshare' && (startsWith(matrix.os, 'debian') || startsWith(matrix.os, 'ubuntu'))
-      run: apt-get update && apt-get install -y --no-install-recommends util-linux-extra
+      run: apt-get update && apt-get install -y --no-install-recommends util-linux-extra uidmap
 
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
