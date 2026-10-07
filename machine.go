@@ -1051,7 +1051,7 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 
 	if hk, ok := m.backend.(hostKernelBackend); ok {
 		if err := hk.Prepare(tmpdir, command, extracontent); err != nil {
-			return -1, err
+			return -1, fmt.Errorf("failed to prepare %s backend: %w", m.backend.Name(), err)
 		}
 	} else {
 		err = m.setupscratch()
