@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"al.essio.dev/pkg/shellescape"
 	"golang.org/x/sys/unix"
@@ -33,12 +34,54 @@ func (b unshareBackend) Name() string {
 	return "unshare"
 }
 
-// Namespaces created for the machine; the probe in Supported uses the same set
+// Namespaces created for the machine
 var unshareArgs = []string{
-	"--user", "--map-root-user",
+	"--user",
 	"--mount", "--propagation", "private",
 	"--pid", "--fork", "--kill-child",
 	"--uts", "--ipc",
+}
+
+// Id mappings to try, in order of preference. Root in the machine is always the
+// invoking user; with --map-auto the remaining ids are mapped to the user's
+// first /etc/subuid and /etc/subgid block (via newuidmap/newgidmap), so that
+// chown to other ids works as needed by tar, dpkg and debootstrap
+var unshareIdMaps = [][]string{
+	{"--map-auto", "--map-root-user"},
+	{"--map-root-user"},
+}
+
+// Probe for the first working id mapping; the result is cached as the probe
+// spawns processes and is needed by both Supported and Start
+var unshareIdMap struct {
+	once sync.Once
+	args []string
+	err  error
+}
+
+func unshareProbe(unshare string) ([]string, error) {
+	unshareIdMap.once.Do(func() {
+		var errs []string
+		for _, idmap := range unshareIdMaps {
+			args := append(append([]string{}, unshareArgs...), idmap...)
+			out, err := exec.Command(unshare, append(args, "true")...).CombinedOutput()
+			if err == nil {
+				unshareIdMap.args = args
+				if len(idmap) == 1 {
+					fmt.Fprintln(os.Stderr, "Warning: unshare backend can't map subordinate ids "+
+						"(needs newuidmap/newgidmap and /etc/subuid and /etc/subgid entries); only "+
+						"root is mapped so chown to other users will fail")
+				}
+				return
+			}
+			errs = append(errs, fmt.Sprintf("%s: %v: %s", strings.Join(idmap, " "), err,
+				strings.TrimSpace(string(out))))
+		}
+		unshareIdMap.err = fmt.Errorf("unable to create user namespace; unprivileged user namespaces "+
+			"may be disabled (kernel.unprivileged_userns_clone, AppArmor restrict_unprivileged_userns "+
+			"or a container seccomp profile): %s", strings.Join(errs, "; "))
+	})
+	return unshareIdMap.args, unshareIdMap.err
 }
 
 func (b unshareBackend) Supported() (bool, error) {
@@ -47,11 +90,8 @@ func (b unshareBackend) Supported() (bool, error) {
 		return false, fmt.Errorf("failed to find unshare binary (util-linux): %w", err)
 	}
 
-	probe := exec.Command(unshare, append(unshareArgs, "true")...)
-	if out, err := probe.CombinedOutput(); err != nil {
-		return false, fmt.Errorf("unable to create user namespace; unprivileged user namespaces may be "+
-			"disabled (kernel.unprivileged_userns_clone, AppArmor restrict_unprivileged_userns or a "+
-			"container seccomp profile): %w: %s", err, strings.TrimSpace(string(out)))
+	if _, err := unshareProbe(unshare); err != nil {
+		return false, err
 	}
 
 	return true, nil
@@ -267,6 +307,13 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	line("env -i %s /bin/sh -c %s", strings.Join(env, " "), q(command))
 	line("echo $? > /run/fakemachine/result")
 
+	// With subordinate ids mapped, a host backed scratch may contain files the
+	// invoking user can't remove from the host, so empty it from in here
+	if m.scratchsize > 0 {
+		line("cd /")
+		line("find /scratch -xdev -mindepth 1 -delete")
+	}
+
 	if err := os.WriteFile(b.setupScriptPath(tmpdir), []byte(s.String()), 0755); err != nil {
 		return fmt.Errorf("failed to write setup script: %w", err)
 	}
@@ -290,7 +337,12 @@ func (b unshareBackend) Start() (bool, error) {
 		return false, fmt.Errorf("fakemachine run directory not set up")
 	}
 
-	args := append([]string{unshare}, unshareArgs...)
+	nsargs, err := unshareProbe(unshare)
+	if err != nil {
+		return false, err
+	}
+
+	args := append([]string{unshare}, nsargs...)
 	args = append(args, "/bin/sh", b.setupScriptPath(tmpdir))
 
 	pa := os.ProcAttr{
