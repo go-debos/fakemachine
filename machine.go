@@ -344,6 +344,17 @@ func InMachine() (ret bool) {
 	return
 }
 
+// The name of the backend the current process is running under, or an empty
+// string when not running in a fakemachine. Lets the command adapt to
+// limitations of a backend, e.g. the unshare backend being unable to run
+// systemd-nspawn
+func InMachineBackend() string {
+	if !InMachine() {
+		return ""
+	}
+	return os.Getenv("FAKEMACHINE_BACKEND")
+}
+
 // Check whether the auto backend is supported
 func Supported() bool {
 	_, err := newBackend("auto", nil)
@@ -417,7 +428,7 @@ After=basic.target systemd-resolved.service binfmt-support.service systemd-netwo
 OnFailure=poweroff.target
 
 [Service]
-Environment=HOME=/root IN_FAKE_MACHINE=yes %[2]s
+Environment=HOME=/root IN_FAKE_MACHINE=yes FAKEMACHINE_BACKEND=%[3]s %[2]s
 WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
@@ -947,7 +958,8 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	err = w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " ")), 0644)
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " "),
+			m.backend.Name()), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write fakemachine.service: %w", err)
 	}

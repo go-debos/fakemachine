@@ -293,7 +293,7 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	// Run the job; the exit code is passed back through the result file as
 	// for the VM backends
 	env := []string{"HOME=/root", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-		"IN_FAKE_MACHINE=yes"}
+		"IN_FAKE_MACHINE=yes", "FAKEMACHINE_BACKEND=" + b.Name()}
 	if term, ok := os.LookupEnv("TERM"); ok {
 		env = append(env, "TERM="+term)
 	}
