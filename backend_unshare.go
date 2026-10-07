@@ -51,6 +51,10 @@ var unshareIdMaps = [][]string{
 	{"--map-root-user"},
 }
 
+// When already root (e.g. in a CI container) there are normally no subordinate
+// ids, but the full id range can be mapped through directly without newuidmap
+var unshareRootIdMap = []string{"--map-users=all", "--map-groups=all"}
+
 // Probe for the first working id mapping; the result is cached as the probe
 // spawns processes and is needed by both Supported and Start
 var unshareIdMap struct {
@@ -62,7 +66,11 @@ var unshareIdMap struct {
 func unshareProbe(unshare string) ([]string, error) {
 	unshareIdMap.once.Do(func() {
 		var errs []string
-		for _, idmap := range unshareIdMaps {
+		idmaps := unshareIdMaps
+		if os.Geteuid() == 0 {
+			idmaps = append([][]string{unshareRootIdMap}, idmaps...)
+		}
+		for _, idmap := range idmaps {
 			args := append(append([]string{}, unshareArgs...), idmap...)
 			out, err := exec.Command(unshare, append(args, "true")...).CombinedOutput()
 			if err == nil {
