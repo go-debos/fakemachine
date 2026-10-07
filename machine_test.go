@@ -29,6 +29,23 @@ func CreateMachine(t *testing.T) *Machine {
 	return machine
 }
 
+// Skip the test when running with the named backend, e.g. for features which
+// need a VM such as block device images
+func skipIfBackend(t *testing.T, m *Machine, name, why string) {
+	t.Helper()
+	if m.backend.Name() == name {
+		t.Skipf("not supported by the %s backend: %s", name, why)
+	}
+}
+
+// Skip the test unless running with the named backend
+func skipUnlessBackend(t *testing.T, m *Machine, name string) {
+	t.Helper()
+	if m.backend.Name() != name {
+		t.Skipf("only applies to the %s backend", name)
+	}
+}
+
 func TestSuccessfulCommand(t *testing.T) {
 	m := CreateMachine(t)
 
@@ -47,6 +64,7 @@ func TestCommandNotFound(t *testing.T) {
 
 func TestImage(t *testing.T) {
 	m := CreateMachine(t)
+	skipIfBackend(t, m, "unshare", "images need block devices")
 
 	_, err := m.CreateImage("test.img", 1024*1024)
 	require.NoError(t, err)
@@ -74,6 +92,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 	}
 
 	m := CreateMachine(t)
+	skipIfBackend(t, m, "unshare", "images need block devices")
 	m.SetSectorSize(sectorsize)
 	_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
 	require.NoError(t, err)
@@ -146,6 +165,7 @@ func TestScratchDisk(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
+	skipIfBackend(t, m, "unshare", "on-disk scratch is a directory, not an ext4 image")
 	m.SetScratch(1024*1024*1024, "")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
@@ -155,6 +175,7 @@ func TestScratchDisk(t *testing.T) {
 
 func TestMemory(t *testing.T) {
 	m := CreateMachine(t)
+	skipIfBackend(t, m, "unshare", "memory is not limited")
 
 	m.SetMemory(1024)
 	// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
@@ -206,6 +227,7 @@ func TestImageLabel(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
+	skipIfBackend(t, m, "unshare", "images need block devices")
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
 	require.NoError(t, err)
 
@@ -305,4 +327,78 @@ func TestCommandEscaping(t *testing.T) {
 		"TestCommandEscaping", "-testarg", "$s'n\\akes"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
+}
+
+func TestScratchDir(t *testing.T) {
+	if InMachine() {
+		require.NoError(t, os.WriteFile("/scratch/test", []byte("scratch"), 0644))
+		return
+	}
+
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "unshare")
+
+	scratchpath := t.TempDir()
+	m.SetScratch(1024*1024*1024, scratchpath)
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDir"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+
+	// The scratch directory must be cleaned up after the run
+	entries, err := os.ReadDir(scratchpath)
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}
+
+func TestVolumeWrite(t *testing.T) {
+	m := CreateMachine(t)
+
+	dir := t.TempDir()
+	m.AddVolume(dir)
+
+	exitcode, err := m.Run("echo hello > " + filepath.Join(dir, "out"))
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+
+	data, err := os.ReadFile(filepath.Join(dir, "out"))
+	require.NoError(t, err)
+	require.Equal(t, "hello\n", string(data))
+}
+
+func TestUnshareIsolation(t *testing.T) {
+	if InMachine() {
+		require.Equal(t, 0, os.Getuid())
+
+		hostname, err := os.Hostname()
+		require.NoError(t, err)
+		require.Equal(t, "fakemachine", hostname)
+
+		// PID 1 is the setup script in the new PID namespace, not the host init
+		cmdline, err := os.ReadFile("/proc/1/cmdline")
+		require.NoError(t, err)
+		require.Contains(t, string(cmdline), "setup.sh")
+
+		AssertMount(t, "/scratch", "tmpfs")
+		return
+	}
+
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "unshare")
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestUnshareIsolation"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+func TestUnshareRejectsImages(t *testing.T) {
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "unshare")
+
+	_, err := m.CreateImage(filepath.Join(t.TempDir(), "test.img"), 1024*1024)
+	require.NoError(t, err)
+
+	exitcode, err := m.Run("true")
+	require.Error(t, err)
+	require.Equal(t, -1, exitcode)
 }

@@ -757,7 +757,8 @@ func (m *Machine) cleanup() error {
 		return nil
 	}
 
-	if err := os.Remove(m.scratchfile); err != nil {
+	// The unshare backend uses a scratch directory rather than an image
+	if err := os.RemoveAll(m.scratchfile); err != nil {
 		return fmt.Errorf("failed to remove scratchfile %q: %w", m.scratchfile, err)
 	}
 
@@ -1036,14 +1037,20 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		}
 	}()
 
-	err = m.setupscratch()
-	if err != nil {
-		return -1, err
-	}
+	if hk, ok := m.backend.(hostKernelBackend); ok {
+		if err := hk.Prepare(tmpdir, command, extracontent); err != nil {
+			return -1, err
+		}
+	} else {
+		err = m.setupscratch()
+		if err != nil {
+			return -1, err
+		}
 
-	m.initrdpath = path.Join(tmpdir, "initramfs.cpio")
-	if err := m.buildInitrd(command, extracontent); err != nil {
-		return -1, err
+		m.initrdpath = path.Join(tmpdir, "initramfs.cpio")
+		if err := m.buildInitrd(command, extracontent); err != nil {
+			return -1, err
+		}
 	}
 
 	if !m.quiet {

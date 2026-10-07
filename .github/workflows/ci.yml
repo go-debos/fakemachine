@@ -60,6 +60,9 @@ jobs:
         backend:
           - qemu
           - kvm
+          # unprivileged user namespaces are blocked by the default container
+          # seccomp/AppArmor profiles and masked /proc paths
+          - unshare
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: 'ubuntu-latest'
     defaults:
@@ -72,6 +75,7 @@ jobs:
         --cap-add=SYS_PTRACE
         --tmpfs /scratch:exec
         ${{ matrix.backend == 'kvm' && '--device /dev/kvm' || '' }}
+        ${{ matrix.backend == 'unshare' && '--privileged' || '' }}
     env:
       TMP: /scratch
     steps:

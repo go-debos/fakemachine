@@ -12,6 +12,12 @@ host, such as mounting filesystem images.
 If fakemachine is ran inside a container, the virtual machine's root filesystem
 is derived from the container's root filesystem.
 
+The `unshare` backend runs the command in Linux user, mount and PID namespaces
+directly on the host kernel instead of in a VM. It is much faster and needs
+neither `/dev/kvm` nor root, but it shares the host network and does not
+support images or memory/CPU limits. It is never chosen by `auto`; select it
+with `--backend=unshare`.
+
 ## Synopsis
 
 ```
@@ -21,7 +27,8 @@ fakemachine [--help]
 
 Application Options:
 ```
-  -b, --backend=[auto|kvm|qemu] Virtualisation backend to use (default: auto)
+  -b, --backend=[auto|kvm|qemu|unshare]
+                                Virtualisation backend to use (default: auto)
   -v, --volume=                 volume to mount
   -i, --image=                  image to add
   -e, --environ-var=            Environment variables (use -e VARIABLE:VALUE syntax)

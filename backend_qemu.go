@@ -3,15 +3,12 @@
 package fakemachine
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
-
-	"golang.org/x/sys/unix"
 )
 
 type qemuBackend struct {
@@ -79,16 +76,10 @@ func (b qemuBackend) KernelRelease() (string, error) {
 	 * modules for that try the latest from /lib/modules. The former works best
 	 * for systems directly running fakemachine, the latter makes sense in docker
 	 * environments */
-	var u unix.Utsname
-	if err := unix.Uname(&u); err != nil {
-		return "", fmt.Errorf("failed to get kernel release: %w", err)
+	release, err := hostKernelRelease()
+	if err != nil {
+		return "", err
 	}
-
-	n := bytes.IndexByte(u.Release[:], 0)
-	if n < 0 {
-		n = len(u.Release)
-	}
-	release := string(u.Release[:n])
 
 	moduleDir := path.Join("/lib/modules", release)
 	if _, err := os.Stat(moduleDir); err == nil {
