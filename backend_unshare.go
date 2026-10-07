@@ -46,35 +46,35 @@ var unshareArgs = []string{
 // invoking user; with --map-auto the remaining ids are mapped to the user's
 // first /etc/subuid and /etc/subgid block (via newuidmap/newgidmap), so that
 // chown to other ids works as needed by tar, dpkg and debootstrap
-var unshareIdMaps = [][]string{
+var unshareIDMaps = [][]string{
 	{"--map-auto", "--map-root-user"},
 	{"--map-root-user"},
 }
 
 // When already root (e.g. in a CI container) there are normally no subordinate
 // ids, but the full id range can be mapped through directly without newuidmap
-var unshareRootIdMap = []string{"--map-users=all", "--map-groups=all"}
+var unshareRootIDMap = []string{"--map-users=all", "--map-groups=all"}
 
 // Probe for the first working id mapping; the result is cached as the probe
 // spawns processes and is needed by both Supported and Start
-var unshareIdMap struct {
+var unshareIDMap struct {
 	once sync.Once
 	args []string
 	err  error
 }
 
 func unshareProbe(unshare string) ([]string, error) {
-	unshareIdMap.once.Do(func() {
+	unshareIDMap.once.Do(func() {
 		var errs []string
-		idmaps := unshareIdMaps
+		idmaps := unshareIDMaps
 		if os.Geteuid() == 0 {
-			idmaps = append([][]string{unshareRootIdMap}, idmaps...)
+			idmaps = append([][]string{unshareRootIDMap}, idmaps...)
 		}
 		for _, idmap := range idmaps {
 			args := append(append([]string{}, unshareArgs...), idmap...)
 			out, err := exec.Command(unshare, append(args, "true")...).CombinedOutput()
 			if err == nil {
-				unshareIdMap.args = args
+				unshareIDMap.args = args
 				if len(idmap) == 1 {
 					fmt.Fprintf(os.Stderr, "Warning: unshare backend can't map subordinate ids "+
 						"(needs newuidmap/newgidmap and /etc/subuid and /etc/subgid entries); only "+
@@ -85,11 +85,11 @@ func unshareProbe(unshare string) ([]string, error) {
 			errs = append(errs, fmt.Sprintf("%s: %v: %s", strings.Join(idmap, " "), err,
 				strings.TrimSpace(string(out))))
 		}
-		unshareIdMap.err = fmt.Errorf("unable to create user namespace; unprivileged user namespaces "+
+		unshareIDMap.err = fmt.Errorf("unable to create user namespace; unprivileged user namespaces "+
 			"may be disabled (kernel.unprivileged_userns_clone, AppArmor restrict_unprivileged_userns "+
 			"or a container seccomp profile): %s", strings.Join(errs, "; "))
 	})
-	return unshareIdMap.args, unshareIdMap.err
+	return unshareIDMap.args, unshareIDMap.err
 }
 
 func (b unshareBackend) Supported() (bool, error) {
