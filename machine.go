@@ -794,6 +794,7 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 		{Directory: "/var/tmp", Perm: 01777},
 		{Directory: "/var/lib/dbus", Perm: 0755},
 		{Directory: "/tmp", Perm: 01777},
+		{Directory: "/mnt", Perm: 0755},
 		{Directory: "/sys", Perm: 0755},
 		{Directory: "/proc", Perm: 0755},
 		{Directory: "/run", Perm: 0755},
