@@ -102,6 +102,20 @@ jobs:
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
 
+    # The job runs as root, where the unshare backend maps every id through;
+    # run again as a user so the subordinate id path is tested too
+    - name: Run unit tests (unshare backend, non-root)
+      if: matrix.backend == 'unshare'
+      run: |
+        useradd -m fmtest
+        grep -q '^fmtest:' /etc/subuid || echo 'fmtest:100000:65536' >> /etc/subuid
+        grep -q '^fmtest:' /etc/subgid || echo 'fmtest:100000:65536' >> /etc/subgid
+        chmod 1777 /scratch
+        chown -R fmtest "$GITHUB_WORKSPACE"
+        runuser -u fmtest -- env PATH="$PATH" HOME=/home/fmtest TMP=/scratch \
+          GOCACHE=/scratch/go-cache GOPATH=/scratch/go \
+          go test -v ./... --backend=unshare
+
   test-name-resolution-without-resolved:
     # fakemachine should work on hosts without systemd-resolved, falling back to
     # generating /etc/resolv.conf from the DHCP lease. Uninstall systemd-resolved
