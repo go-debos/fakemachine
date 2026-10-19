@@ -73,6 +73,7 @@ type probeReport struct {
 	CgroupReadonly   bool
 	ProcSysReadonly  bool
 	RuntimeLeak      []string // host runtime files which could be reached
+	RootEscape       []string // ways found to read the secret from outside the machine's root
 }
 
 func mountReadonly(p string) bool {
@@ -122,6 +123,29 @@ func probeHostRuntime(paths []string, marker string) []string {
 	}
 
 	return leaks
+}
+
+// Try to get out of the machine's root to the host's, and read the secret
+// there. Each way found is listed; a denied attempt is not an escape.
+func probeRootEscape(secret string) []string {
+	var found []string
+	for _, prefix := range []string{"/proc/1/root", "/proc/self/root", "/../../.."} {
+		//nolint:gosec // The probe deliberately reads paths chosen by the test.
+		if _, err := os.ReadFile(prefix + secret); err == nil {
+			found = append(found, prefix)
+		}
+	}
+
+	// The classic chroot escape needs a root which is not the real one, so it
+	// runs in a child to leave this process alone. Exit 0 means it read the
+	// secret, 2 that chroot was denied.
+	//nolint:noctx,gosec // Synchronous operation; the probe re-executes its own test binary.
+	cmd := exec.Command("/proc/self/exe", "-test.run", "^TestIsolationChrootProbe$", "-testarg", secret)
+	if err := cmd.Run(); err == nil {
+		found = append(found, "chroot")
+	}
+
+	return found
 }
 
 // Try to change the host kernel through /sys and the cgroup tree. Files are
@@ -488,6 +512,35 @@ func TestIsolationPeerProbe(t *testing.T) {
 // TestIsolationProbe is not a test by itself: it is the part of the isolation
 // suite which runs inside the machine, observes it and writes a report for the
 // host to check against the backend's contract.
+// Runs in a child of the probe, which sets the secret as the test argument:
+// chroot into a fresh directory, climb out of it and read the secret.
+func TestIsolationChrootProbe(t *testing.T) {
+	if !InMachine() {
+		t.Skip("runs inside the machine, started by TestIsolationProbe")
+	}
+	//nolint:usetesting // The process chroots into it and exits, so t.TempDir cleanup cannot run.
+	dir, err := os.MkdirTemp("", "chroot")
+	if err != nil {
+		os.Exit(2)
+	}
+	if err := syscall.Chroot(dir); err != nil {
+		os.Exit(2)
+	}
+	//nolint:usetesting // The process exits without running test cleanup.
+	_ = os.Chdir("/")
+	for range 64 {
+		//nolint:usetesting // The process exits without running test cleanup.
+		_ = os.Chdir("..")
+	}
+	if err := syscall.Chroot("."); err != nil {
+		os.Exit(2)
+	}
+	if _, err := os.ReadFile("." + testArg); err == nil {
+		os.Exit(0)
+	}
+	os.Exit(2)
+}
+
 func TestIsolationProbe(t *testing.T) {
 	if !InMachine() {
 		t.Skip("runs inside the machine, started by TestIsolation")
@@ -556,6 +609,7 @@ func TestIsolationProbe(t *testing.T) {
 	r.Keys, r.KeyLeaked = probeKeys(in.KeyIDs, in.KeyDesc, in.Marker)
 	r.Shm, r.ShmLeaked = probeShm(in.ShmKey, in.Marker)
 	r.RuntimeLeak = probeHostRuntime(in.HostRuntime, in.Marker)
+	r.RootEscape = probeRootEscape(in.SecretPath)
 	r.Sys, r.SysReadonly = probeSys(in.Marker)
 	r.CgroupReadonly = mountReadonly("/sys/fs/cgroup")
 	r.ProcSysReadonly = mountReadonly("/proc/sys")

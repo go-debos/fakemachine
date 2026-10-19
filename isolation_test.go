@@ -600,6 +600,17 @@ func checkHostRuntime(_ isolationContract, r probeReport) error {
 	return nil
 }
 
+// There is no canary for this: the root is the machine's pivot_root in a
+// mount namespace, and fakemachine has no switch for either. Dropping the
+// mount namespace already stops the machine starting.
+func checkRootEscape(_ isolationContract, r probeReport) error {
+	if len(r.RootEscape) > 0 {
+		return fmt.Errorf("the machine can read host files outside its root through %v", r.RootEscape)
+	}
+
+	return nil
+}
+
 // Writes to /sys reach the host kernel when it is shared. The machine's own
 // cgroup may be delegated to the user, so making one there is only logged; with
 // a private cgroup namespace the cgroup root is the machine's own too.
@@ -659,6 +670,7 @@ func TestIsolation(t *testing.T) {
 		"host":       func() error { return checkHostIntact(c, r, fx.hostname, fx.leakSeen) },
 		"symlinks":   func() error { return checkSymlinks(c, r) },
 		"runtime":    func() error { return checkHostRuntime(c, r) },
+		"rootescape": func() error { return checkRootEscape(c, r) },
 		"sys": func() error {
 			t.Logf("/sys from the machine (read-only %v, cgroup %v, /proc/sys %v): %v",
 				r.SysReadonly, r.CgroupReadonly, r.ProcSysReadonly, r.Sys)
