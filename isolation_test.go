@@ -45,6 +45,7 @@ type hostFixture struct {
 	keyDesc     string
 	shmKey      int // host SysV segment holding the marker
 	perfAllowed bool
+	loopback    string   // host TCP service on the loopback interface
 	runtime     []string // host runtime files which must stay out of reach
 }
 
@@ -172,6 +173,13 @@ func newHostFixture(t *testing.T) *hostFixture {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = l.Close() })
 
+	// A service which only listens on the host's loopback interface
+	//nolint:noctx // The listener lives for the whole test.
+	tl, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = tl.Close() })
+	fx.loopback = tl.Addr().String()
+
 	for _, n := range nsNames {
 		fx.hostNS[n], _ = os.Readlink("/proc/self/ns/" + n)
 	}
@@ -196,6 +204,7 @@ func (fx *hostFixture) input() probeInput {
 		ShmKey:         fx.shmKey,
 		HostRuntime:    fx.runtime,
 		PerfAllowed:    fx.perfAllowed,
+		LoopbackAddr:   fx.loopback,
 	}
 }
 
@@ -566,6 +575,11 @@ func checkNetwork(c isolationContract, r probeReport) error {
 		return fmt.Errorf("abstract socket reachable = %v, contract says %v",
 			r.AbstractReach, c.AbstractSocketReachable)
 	}
+	if r.LoopbackReach != c.HostLoopbackReachable {
+		return fmt.Errorf("host loopback service reachable = %v, contract says %v",
+			r.LoopbackReach, c.HostLoopbackReachable)
+	}
+
 	return nil
 }
 

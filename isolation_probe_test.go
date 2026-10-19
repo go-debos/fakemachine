@@ -45,6 +45,8 @@ type probeInput struct {
 	// The host lets unprivileged users profile every cpu, so doing so says
 	// nothing about the machine
 	PerfAllowed bool
+	// TCP service listening on the host's loopback interface
+	LoopbackAddr string
 }
 
 // What the probe observed from inside; the host judges it against the contract.
@@ -76,6 +78,7 @@ type probeReport struct {
 	CgroupReadonly   bool
 	ProcSysReadonly  bool
 	RuntimeLeak      []string // host runtime files which could be reached
+	LoopbackReach    bool     // the host's loopback service accepted a connection
 	RootEscape       []string // ways found to read the secret from outside the machine's root
 }
 
@@ -662,6 +665,12 @@ func TestIsolationProbe(t *testing.T) {
 	//nolint:noctx // Synchronous probe; the timeout bounds the attempt.
 	if c, err := net.DialTimeout("unix", "@"+in.AbstractSocket, time.Second); err == nil {
 		r.AbstractReach = true
+		_ = c.Close()
+	}
+
+	//nolint:noctx // Synchronous probe; the timeout bounds the attempt.
+	if c, err := net.DialTimeout("tcp", in.LoopbackAddr, time.Second); err == nil {
+		r.LoopbackReach = true
 		_ = c.Close()
 	}
 

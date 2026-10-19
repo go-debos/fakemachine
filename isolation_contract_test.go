@@ -15,6 +15,9 @@ type isolationContract struct {
 	SharedNS []string
 	// The host's abstract unix sockets can be reached from the machine
 	AbstractSocketReachable bool
+	// Services on the host's loopback interface can be reached; the VM
+	// backends' user-mode networking does not forward it
+	HostLoopbackReachable bool
 	// Static volumes (/usr etc) are mounted read-only
 	ReadonlyStatic bool
 	// Top level entries allowed in /dev; nil disables the check
@@ -45,6 +48,7 @@ var contracts = map[string]isolationContract{
 		PrivateNS:               []string{"user", "mnt", "pid", "uts", "ipc"},
 		SharedNS:                []string{"net", "cgroup"},
 		AbstractSocketReachable: true,
+		HostLoopbackReachable:   true,
 		ReadonlyStatic:          true,
 		AllowedDev: []string{
 			"null", "zero", "full", "random", "urandom", "tty",
