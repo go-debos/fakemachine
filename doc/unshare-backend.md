@@ -212,12 +212,18 @@ asserts the report on the host against a per-backend contract
     go test -v -run 'TestIsolation' ./... --backend=unshare
 
 The contract records what is shared as well as what is private (for unshare:
-network, cgroup namespace and abstract unix sockets), so any change in either
+network, host loopback services, cgroup namespace and abstract unix
+sockets), so any change in either
 direction fails a test and has to be made deliberately.
 
 - `TestIsolation`: namespaces, host files, read-only static volumes, process
   visibility, denied privileged operations, `/dev`, environment, identity,
-  network and mount propagation.
+  network (including the host's loopback services), mount propagation, host
+  runtime files in `/dev/shm` and `$XDG_RUNTIME_DIR`, escapes from the root
+  (`/proc/1/root`, `..`, chroot) and further privileged kernel interfaces
+  (clock, BPF, perf, `open_by_handle_at`).
+- `TestIsolationExit`: a program which exits non-zero with a background child
+  running passes its status on and leaves nothing behind.
 - `TestIsolationCleanup`: the host is unchanged after a run, including with
   `SetScratch`.
 - `TestIsolationSignals`: SIGTERM and SIGKILL of fakemachine leave no machine
@@ -235,7 +241,11 @@ tooling, so belongs in debos.
 - **Network namespace.** Optionally use `--net` with `slirp4netns` or `pasta`
   for parity with the VM backends' user-mode networking. This would also allow
   a fresh sysfs mount.
-- **Resource limits.** Enforce `-m`/`-c` through a delegated cgroup v2 subtree,
+- **Hardening.** The sandbox relies on namespaces alone. A seccomp filter,
+  `no_new_privs` or Landlock would add defence in depth; the isolation tests
+  would need contract entries for whatever they change.
+- **Resource limits.** The backend sets none, so a runaway machine can use all
+  of the host's memory and CPUs. Enforce `-m`/`-c` through a delegated cgroup v2 subtree,
   for example by running inside `systemd-run --user --scope -p MemoryMax=...`.
 - **debos image abstraction.** Teach debos to build images through the
   approach under "Build filesystem images from directories" when the backend
