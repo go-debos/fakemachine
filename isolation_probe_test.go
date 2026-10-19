@@ -39,6 +39,9 @@ type probeInput struct {
 	KeyDesc string
 	// SysV shared memory key of a host segment holding the marker
 	ShmKey int
+	// Host runtime files (a POSIX shm object, a session socket) which hold
+	// the marker or accept connections; none may be reachable
+	HostRuntime []string
 }
 
 // What the probe observed from inside; the host judges it against the contract.
@@ -69,6 +72,7 @@ type probeReport struct {
 	SysReadonly      bool
 	CgroupReadonly   bool
 	ProcSysReadonly  bool
+	RuntimeLeak      []string // host runtime files which could be reached
 }
 
 func mountReadonly(p string) bool {
@@ -91,6 +95,33 @@ func probeShm(key int, marker string) (string, bool) {
 	defer func() { _ = unix.SysvShmDetach(b) }()
 
 	return "ok", strings.HasPrefix(string(b), marker)
+}
+
+// Which of the host's runtime files can be reached: a path which exists, holds
+// the marker or accepts connections is a leak. Only the host's own mounts can
+// make them appear at the same path in the machine.
+func probeHostRuntime(paths []string, marker string) []string {
+	var leaks []string
+	for _, p := range paths {
+		leaked := false
+		if _, err := os.Lstat(p); err == nil {
+			leaked = true
+		}
+		//nolint:gosec // The probe deliberately reads paths chosen by the test.
+		if b, err := os.ReadFile(p); err == nil && strings.Contains(string(b), marker) {
+			leaked = true
+		}
+		//nolint:noctx // Synchronous probe; the timeout bounds the attempt.
+		if c, err := net.DialTimeout("unix", p, time.Second); err == nil {
+			_ = c.Close()
+			leaked = true
+		}
+		if leaked {
+			leaks = append(leaks, p)
+		}
+	}
+
+	return leaks
 }
 
 // Try to change the host kernel through /sys and the cgroup tree. Files are
@@ -524,6 +555,7 @@ func TestIsolationProbe(t *testing.T) {
 	r.SymlinkEscape = probeSymlinks(in.Symlinks, in.Marker)
 	r.Keys, r.KeyLeaked = probeKeys(in.KeyIDs, in.KeyDesc, in.Marker)
 	r.Shm, r.ShmLeaked = probeShm(in.ShmKey, in.Marker)
+	r.RuntimeLeak = probeHostRuntime(in.HostRuntime, in.Marker)
 	r.Sys, r.SysReadonly = probeSys(in.Marker)
 	r.CgroupReadonly = mountReadonly("/sys/fs/cgroup")
 	r.ProcSysReadonly = mountReadonly("/proc/sys")

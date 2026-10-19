@@ -43,7 +43,8 @@ type hostFixture struct {
 	symlinks    []string // machine paths of symlinks to the secret
 	keyIDs      []int    // host keys holding the marker
 	keyDesc     string
-	shmKey      int // host SysV segment holding the marker
+	shmKey      int      // host SysV segment holding the marker
+	runtime     []string // host runtime files which must stay out of reach
 }
 
 func randHex(t *testing.T) string {
@@ -124,6 +125,22 @@ func newHostFixture(t *testing.T) *hostFixture {
 	// keep it from the machine
 	fx.shmKey = addHostShm(t, marker)
 
+	// What other programs leave around in the host's runtime directories: a
+	// POSIX shared memory object, and a session socket where there is one
+	shmFile := "/dev/shm/fm-" + marker
+	//nolint:gosec // World-writable so the machine could tamper with it if not isolated.
+	require.NoError(t, os.WriteFile(shmFile, []byte(marker), 0o666))
+	t.Cleanup(func() { _ = os.Remove(shmFile) })
+	fx.runtime = append(fx.runtime, shmFile)
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
+		sock := filepath.Join(dir, "fm-"+marker+".sock")
+		//nolint:noctx // The listener lives for the whole test.
+		if l, err := net.Listen("unix", sock); err == nil {
+			t.Cleanup(func() { _ = l.Close() })
+			fx.runtime = append(fx.runtime, sock)
+		}
+	}
+
 	// Host process the machine must neither see nor be able to signal
 	digits := randDigits(t)
 	fx.sleeperArgv = "sleep\x003600." + digits + "\x00"
@@ -172,6 +189,7 @@ func (fx *hostFixture) input() probeInput {
 		KeyIDs:         fx.keyIDs,
 		KeyDesc:        fx.keyDesc,
 		ShmKey:         fx.shmKey,
+		HostRuntime:    fx.runtime,
 	}
 }
 
@@ -574,6 +592,14 @@ func checkShm(_ isolationContract, r probeReport) error {
 	return nil
 }
 
+func checkHostRuntime(_ isolationContract, r probeReport) error {
+	if len(r.RuntimeLeak) > 0 {
+		return fmt.Errorf("host runtime files are reachable from the machine: %v", r.RuntimeLeak)
+	}
+
+	return nil
+}
+
 // Writes to /sys reach the host kernel when it is shared. The machine's own
 // cgroup may be delegated to the user, so making one there is only logged; with
 // a private cgroup namespace the cgroup root is the machine's own too.
@@ -632,6 +658,7 @@ func TestIsolation(t *testing.T) {
 		"network":    func() error { return checkNetwork(c, r) },
 		"host":       func() error { return checkHostIntact(c, r, fx.hostname, fx.leakSeen) },
 		"symlinks":   func() error { return checkSymlinks(c, r) },
+		"runtime":    func() error { return checkHostRuntime(c, r) },
 		"sys": func() error {
 			t.Logf("/sys from the machine (read-only %v, cgroup %v, /proc/sys %v): %v",
 				r.SysReadonly, r.CgroupReadonly, r.ProcSysReadonly, r.Sys)
@@ -1056,6 +1083,11 @@ func TestIsolationCanary(t *testing.T) {
 
 			return checkKeyring(c, r)
 		}},
+		// Sharing the host's /dev/shm is the only way for its runtime files to
+		// show up, and volumes are mounted after the machine's own /dev/shm
+		{"host /dev/shm volume", func(_ *testing.T) {}, func(r probeReport, _ *hostFixture) error {
+			return checkHostRuntime(c, r)
+		}},
 		{"writable kernel filesystems", func(t *testing.T) {
 			t.Helper()
 			unshareReadonlyKernelFS = false
@@ -1069,10 +1101,18 @@ func TestIsolationCanary(t *testing.T) {
 		}},
 	}
 
+	// Canaries which weaken the sandbox by configuring the machine
+	machineHooks := map[string]func(m *Machine){
+		"host /dev/shm volume": func(m *Machine) { m.AddVolumeAt("/dev/shm", "/dev/shm") },
+	}
+
 	for _, cn := range canaries {
 		t.Run(cn.name, func(t *testing.T) {
 			cn.weaken(t)
 			m := CreateMachine(t)
+			if hook := machineHooks[cn.name]; hook != nil {
+				hook(m)
+			}
 			if cn.check == nil {
 				_, err := m.RunInMachineWithArgs([]string{"-test.run", "^TestIsolationProbe$", "-testarg", "{}"})
 				require.Error(t, err, "machine started with a weakened sandbox")
