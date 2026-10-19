@@ -18,6 +18,12 @@ neither `/dev/kvm` nor root, but it shares the host network and does not
 support images or memory/CPU limits. It is never chosen by `auto`; select it
 with `--backend=unshare`.
 
+The `incus` backend runs the command on the host kernel in an unprivileged
+Incus (LXC) container. It needs a working Incus installation and membership of
+the `incus-admin` group instead of `/dev/kvm`, and unlike `unshare` it has its
+own network and enforces memory/CPU limits. It does not support images either
+and is never chosen by `auto`; select it with `--backend=incus`.
+
 ## Synopsis
 
 ```
@@ -27,7 +33,7 @@ fakemachine [--help]
 
 Application Options:
 ```
-  -b, --backend=[auto|kvm|qemu|unshare]
+  -b, --backend=[auto|kvm|qemu|unshare|incus]
                                 Virtualisation backend to use (default: auto)
   -v, --volume=                 volume to mount
   -i, --image=                  image to add

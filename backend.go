@@ -16,7 +16,15 @@ func implementedBackends(m *Machine) []backend {
 		newKvmBackend(m),
 		newQemuBackend(m),
 		newUnshareBackend(m),
+		newIncusContainerBackend(m),
 	}
+}
+
+// Backends which are only used when requested explicitly, never by "auto";
+// they run on the host kernel so can't provide images.
+var explicitOnlyBackends = map[string]bool{
+	"unshare": true,
+	"incus":   true,
 }
 
 // BackendNames returns the names accepted by NewMachineWithBackend: "auto"
@@ -42,13 +50,12 @@ func newBackend(name string, m *Machine) (backend, error) {
 	var b backend
 	var err error
 
+	//nolint:nestif // Trying each backend in turn is clearer kept inline.
 	if name == "auto" {
 		for _, backend := range backends {
 			backendName := backend.Name()
 
-			/* The unshare backend can't provide images, so never pick it
-			 * implicitly; it has to be requested explicitly */
-			if backendName == "unshare" {
+			if explicitOnlyBackends[backendName] {
 				continue
 			}
 

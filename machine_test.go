@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,15 @@ func skipIfBackend(t *testing.T, m *Machine, name, why string) {
 	t.Helper()
 	if m.backend.Name() == name {
 		t.Skipf("not supported by the %s backend: %s", name, why)
+	}
+}
+
+// Skip the test when running on the host kernel (unshare, incus), e.g. for
+// features which need a VM such as block device images.
+func skipIfHostKernel(t *testing.T, m *Machine, why string) {
+	t.Helper()
+	if _, ok := m.backend.(hostKernelBackend); ok {
+		t.Skipf("not supported by the %s backend: %s", m.backend.Name(), why)
 	}
 }
 
@@ -84,7 +94,7 @@ func TestNetworkDNS(t *testing.T) {
 
 func TestImage(t *testing.T) {
 	m := CreateMachine(t)
-	skipIfBackend(t, m, "unshare", "images need block devices")
+	skipIfHostKernel(t, m, "images need block devices")
 
 	_, err := m.CreateImage("test.img", 1024*1024)
 	require.NoError(t, err)
@@ -114,7 +124,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 	}
 
 	m := CreateMachine(t)
-	skipIfBackend(t, m, "unshare", "images need block devices")
+	skipIfHostKernel(t, m, "images need block devices")
 	m.SetSectorSize(sectorsize)
 	_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
 	require.NoError(t, err)
@@ -192,7 +202,7 @@ func TestScratchDisk(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
-	skipIfBackend(t, m, "unshare", "on-disk scratch is a directory, not an ext4 image")
+	skipIfHostKernel(t, m, "on-disk scratch is a directory, not an ext4 image")
 	m.SetScratch(1024*1024*1024, "")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
@@ -255,7 +265,7 @@ func TestImageLabel(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
-	skipIfBackend(t, m, "unshare", "images need block devices")
+	skipIfHostKernel(t, m, "images need block devices")
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
 	require.NoError(t, err)
 
@@ -378,7 +388,7 @@ func TestScratchDir(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
-	skipUnlessBackend(t, m, "unshare")
+	skipUnlessHostKernel(t, m)
 
 	scratchpath := t.TempDir()
 	m.SetScratch(1024*1024*1024, scratchpath)
@@ -435,9 +445,9 @@ func TestUnshareIsolation(t *testing.T) {
 	require.Equal(t, 0, exitcode)
 }
 
-func TestUnshareRejectsImages(t *testing.T) {
+func TestHostKernelRejectsImages(t *testing.T) {
 	m := CreateMachine(t)
-	skipUnlessBackend(t, m, "unshare")
+	skipUnlessHostKernel(t, m)
 
 	_, err := m.CreateImage(filepath.Join(t.TempDir(), "test.img"), 1024*1024)
 	require.NoError(t, err)
@@ -445,4 +455,46 @@ func TestUnshareRejectsImages(t *testing.T) {
 	exitcode, err := m.Run("true")
 	require.Error(t, err)
 	require.Equal(t, -1, exitcode)
+}
+
+func TestIncusIsolation(t *testing.T) {
+	if InMachine() {
+		require.Equal(t, 0, os.Getuid())
+
+		hostname, err := os.Hostname()
+		require.NoError(t, err)
+		require.Equal(t, "fakemachine", hostname)
+
+		// PID 1 is the init script run by LXC
+		cmdline, err := os.ReadFile("/proc/1/cmdline")
+		require.NoError(t, err)
+		require.Contains(t, string(cmdline), "init.sh")
+
+		// The pushed root is owned by root in the container
+		var st syscall.Stat_t
+		require.NoError(t, syscall.Lstat("/etc/passwd", &st))
+		require.Equal(t, uint32(0), st.Uid)
+
+		AssertMount(t, "/scratch", "tmpfs")
+
+		return
+	}
+
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "incus")
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestIncusIsolation"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+func TestIncusLimits(t *testing.T) {
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "incus")
+
+	m.SetMemory(512)
+	m.SetNumCPUs(1)
+	exitcode, err := m.Run(`[ "$(cat /sys/fs/cgroup/memory.max)" = 536870912 ] && [ "$(nproc)" = 1 ]`)
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
 }
