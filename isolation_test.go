@@ -373,6 +373,20 @@ func diffSnapshot(before, after hostSnapshot) []string {
 // Boot a machine, run the in-machine probes and return their report. Host
 // side effects are checked here since they hold for every backend and for the
 // weakened canary machines too.
+// Killing the machine's pid namespace is asynchronous, so give its processes
+// a moment to go before calling them leftovers. The sleeper is in both
+// snapshots, anything else is a leftover.
+func requireHostRestored(t *testing.T, before hostSnapshot, marker string) {
+	t.Helper()
+	var diff []string
+	require.Eventually(t, func() bool {
+		diff = diffSnapshot(before, takeSnapshot(t, marker))
+
+		return len(diff) == 0
+	}, 2*time.Second, 50*time.Millisecond, "host changed by the machine run")
+	require.Empty(t, diff)
+}
+
 func runIsolationProbe(t *testing.T, m *Machine, fx *hostFixture) probeReport {
 	t.Helper()
 
@@ -401,9 +415,7 @@ func runIsolationProbe(t *testing.T, m *Machine, fx *hostFixture) probeReport {
 	//nolint:musttag // Both ends share the struct, so the field names are the keys.
 	require.NoError(t, json.Unmarshal(data, &r))
 
-	after := takeSnapshot(t, fx.marker)
-	// The sleeper is in both snapshots, anything else is a leftover
-	require.Empty(t, diffSnapshot(before, after), "host changed by the machine run")
+	requireHostRestored(t, before, fx.marker)
 
 	_, err = os.Stat(fx.hostAbsent)
 	require.True(t, os.IsNotExist(err), "%s written in the machine appeared on the host", fx.hostAbsent)
@@ -651,6 +663,27 @@ func checkSys(c isolationContract, r probeReport) error {
 	}
 
 	return nil
+}
+
+// A failing program must not leave anything behind. There is no canary: the
+// pid namespace is what kills the leftovers, and dropping it is already
+// refused (see the "no pid namespace" canary).
+func TestIsolationExit(t *testing.T) {
+	if InMachine() {
+		t.Skip("runs on the host")
+	}
+	m := CreateMachine(t)
+	fx := newHostFixture(t)
+	before := takeSnapshot(t, fx.marker)
+
+	code, err := m.RunInMachineWithArgs([]string{
+		"-test.run", "^TestIsolationExitProbe$", "-testarg", fx.marker,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 3, code, "exit status of the program was not passed on")
+
+	requireHostRestored(t, before, fx.marker)
+	require.True(t, sleeperAlive(fx.sleeper.Process.Pid, fx.sleeperArgv), "host sleeper was killed")
 }
 
 func TestIsolation(t *testing.T) {

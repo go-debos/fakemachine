@@ -591,6 +591,24 @@ func TestIsolationChrootProbe(t *testing.T) {
 	os.Exit(2)
 }
 
+// Leaves a process behind in the background, which carries the marker in its
+// argv so the host can tell if it outlives the machine.
+func startBackgroundChild(marker string) {
+	//nolint:noctx,gosec // The child is deliberately left running; its arguments are fixed apart from the marker.
+	cmd := exec.Command("sh", "-c", "exec sleep 3600", "fm-bg-"+marker)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	_ = cmd.Start()
+}
+
+// Exits non-zero with a background child still running.
+func TestIsolationExitProbe(t *testing.T) {
+	if !InMachine() {
+		t.Skip("runs inside the machine, started by TestIsolationExit")
+	}
+	startBackgroundChild(testArg)
+	os.Exit(3)
+}
+
 func TestIsolationProbe(t *testing.T) {
 	if !InMachine() {
 		t.Skip("runs inside the machine, started by TestIsolation")
@@ -660,6 +678,7 @@ func TestIsolationProbe(t *testing.T) {
 	r.Shm, r.ShmLeaked = probeShm(in.ShmKey, in.Marker)
 	r.RuntimeLeak = probeHostRuntime(in.HostRuntime, in.Marker)
 	r.RootEscape = probeRootEscape(in.SecretPath)
+	startBackgroundChild(in.Marker)
 	r.Sys, r.SysReadonly = probeSys(in.Marker)
 	r.CgroupReadonly = mountReadonly("/sys/fs/cgroup")
 	r.ProcSysReadonly = mountReadonly("/proc/sys")
