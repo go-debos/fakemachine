@@ -175,9 +175,8 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	m := b.machine
 	q := shellescape.Quote
 
-	if len(m.images) > 0 {
-		return fmt.Errorf("the unshare backend does not support images; use a VM backend (kvm/qemu), " +
-			"see doc/unshare-backend.md")
+	if err := rejectImages(m, b.Name()); err != nil {
+		return err
 	}
 
 	if !m.quiet && m.memory != 2048 {
@@ -206,32 +205,18 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	// volumes don't replicate the machine root into itself
 	line(`mount --make-unbindable "$ROOT"`)
 	line(`cd "$ROOT"`)
-	line("mkdir -p usr etc root proc sys dev run scratch tmp var/tmp var/lib/dbus .oldroot")
+	dirs, symlinks := rootSkeleton(m)
+	line("mkdir -p %s .oldroot", strings.Join(dirs, " "))
 	line("chmod 1777 tmp var/tmp")
-	line("ln -s ../run var/run")
-	if m.mergedUsr {
-		line("ln -s usr/bin bin")
-		line("ln -s usr/sbin sbin")
-		line("ln -s usr/lib lib")
-		line("ln -s usr/lib64 lib64")
-	} else {
-		line("mkdir -p bin sbin lib")
-		if _, err := os.Stat("/lib64"); err == nil {
-			// /lib64 is not a static volume, but holds the dynamic linker
-			line("mkdir -p lib64")
-			line(`mount --rbind /lib64 "$ROOT/lib64"`)
-		}
+	for _, l := range symlinks {
+		line("ln -s %s %s", q(l[0]), q(l[1]))
+	}
+	if hostLib64(m) {
+		line(`mount --rbind /lib64 "$ROOT/lib64"`)
 	}
 
-	// Core system configuration, matching what buildInitrd provides
-	for _, f := range []string{"/etc/passwd", "/etc/group", "/etc/nsswitch.conf",
-		"/etc/ld.so.conf", "/etc/ld.so.cache", "/etc/resolv.conf"} {
-		if _, err := os.Stat(f); err == nil {
-			line(`cp -L %s "$ROOT"%s`, q(f), q(f))
-		}
-	}
-	if _, err := os.Stat("/etc/ld.so.conf.d"); err == nil {
-		line(`cp -rL /etc/ld.so.conf.d "$ROOT/etc/"`)
+	for _, f := range hostEtcFiles() {
+		line(`cp -rL %s "$ROOT"%s`, q(f), q(f))
 	}
 	line(`echo fakemachine > "$ROOT/etc/hostname"`)
 	line(`: > "$ROOT/etc/machine-id"`)
@@ -257,19 +242,10 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	// Scratch space; an ext4 image can't be mounted unprivileged so on-disk
 	// scratch is a host directory instead
 	if m.scratchsize > 0 {
-		scratchpath := m.scratchpath
-		if scratchpath == "" {
-			cwd, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to get working directory for scratch path: %w", err)
-			}
-			scratchpath = cwd
-		}
-		scratchdir, err := os.MkdirTemp(scratchpath, "fake-scratch.")
+		scratchdir, err := hostScratchDir(m)
 		if err != nil {
-			return fmt.Errorf("failed to create scratch directory: %w", err)
+			return err
 		}
-		m.scratchfile = scratchdir
 		line(`mount --bind %s "$ROOT/scratch"`, q(scratchdir))
 	} else {
 		line(`mount -t tmpfs -o mode=1777 scratch "$ROOT/scratch"`)
@@ -310,10 +286,111 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	line("umount -l /.oldroot")
 	line("rmdir /.oldroot")
 
-	// Run the job; the exit code is passed back through the result file as
-	// for the VM backends
-	env := []string{"HOME=/root", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-		"IN_FAKE_MACHINE=yes", "FAKEMACHINE_BACKEND=" + b.Name()}
+	s.WriteString(jobScript(m, b.Name(), command))
+
+	//nolint:gosec // The setup script is intentionally executable.
+	if err := os.WriteFile(b.setupScriptPath(tmpdir), []byte(s.String()), 0o755); err != nil {
+		return fmt.Errorf("failed to write setup script: %w", err)
+	}
+
+	return nil
+}
+
+// Helpers shared by the backends which run the command on the host kernel
+
+// Images are block devices, which can't be attached without a VM.
+func rejectImages(m *Machine, name string) error {
+	if len(m.images) > 0 {
+		return fmt.Errorf("the %[1]s backend does not support images; use a VM backend (kvm/qemu), "+
+			"see doc/%[1]s-backend.md", name)
+	}
+
+	return nil
+}
+
+// The directories (relative to the machine root) and symlinks ({target, link})
+// making up the root filesystem skeleton; the static volumes are mounted on top.
+func rootSkeleton(m *Machine) ([]string, [][2]string) {
+	dirs := []string{
+		"usr", "etc", "root", "proc", "sys", "dev", "run", "scratch", "tmp", "var/tmp",
+		"var/lib/dbus",
+	}
+	symlinks := [][2]string{{"../run", "var/run"}}
+	if m.mergedUsr {
+		symlinks = append(symlinks, [][2]string{
+			{"usr/bin", "bin"}, {"usr/sbin", "sbin"}, {"usr/lib", "lib"}, {"usr/lib64", "lib64"},
+		}...)
+	} else {
+		dirs = append(dirs, "bin", "sbin", "lib")
+		if hostLib64(m) {
+			dirs = append(dirs, "lib64")
+		}
+	}
+
+	return dirs, symlinks
+}
+
+// Whether /lib64 has to be mounted from the host; it is not a static volume,
+// but holds the dynamic linker on non merged-usr hosts.
+func hostLib64(m *Machine) bool {
+	if m.mergedUsr {
+		return false
+	}
+	_, err := os.Stat("/lib64")
+
+	return err == nil
+}
+
+// Core system configuration copied from the host, matching what buildInitrd
+// provides.
+func hostEtcFiles() []string {
+	var files []string
+	for _, f := range []string{
+		"/etc/passwd", "/etc/group", "/etc/nsswitch.conf",
+		"/etc/ld.so.conf", "/etc/ld.so.cache", "/etc/resolv.conf", "/etc/ld.so.conf.d",
+	} {
+		if _, err := os.Stat(f); err == nil {
+			files = append(files, f)
+		}
+	}
+
+	return files
+}
+
+// An ext4 image can't be mounted without a VM, so on-disk scratch is a host
+// directory instead; it is removed by Machine.cleanup.
+func hostScratchDir(m *Machine) (string, error) {
+	scratchpath := m.scratchpath
+	if scratchpath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get working directory for scratch path: %w", err)
+		}
+		scratchpath = cwd
+	}
+	scratchdir, err := os.MkdirTemp(scratchpath, "fake-scratch.")
+	if err != nil {
+		return "", fmt.Errorf("failed to create scratch directory: %w", err)
+	}
+	m.scratchfile = scratchdir
+
+	return scratchdir, nil
+}
+
+// The shell commands running the job inside the machine; the exit code is
+// passed back through the result file as for the VM backends.
+func jobScript(m *Machine, name, command string) string {
+	q := shellescape.Quote
+
+	var s strings.Builder
+	line := func(format string, a ...any) {
+		fmt.Fprintf(&s, format+"\n", a...)
+	}
+
+	env := []string{
+		"HOME=/root", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"IN_FAKE_MACHINE=yes", "FAKEMACHINE_BACKEND=" + name,
+	}
 	if term, ok := os.LookupEnv("TERM"); ok {
 		env = append(env, "TERM="+term)
 	}
@@ -334,11 +411,7 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 		line("find /scratch -xdev -mindepth 1 -delete")
 	}
 
-	if err := os.WriteFile(b.setupScriptPath(tmpdir), []byte(s.String()), 0755); err != nil {
-		return fmt.Errorf("failed to write setup script: %w", err)
-	}
-
-	return nil
+	return s.String()
 }
 
 func (b unshareBackend) Start() (bool, error) {
