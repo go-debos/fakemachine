@@ -11,8 +11,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"al.essio.dev/pkg/shellescape"
 	"golang.org/x/sys/unix"
@@ -32,6 +35,68 @@ func newUnshareBackend(m *Machine) unshareBackend {
 
 func (b unshareBackend) Name() string {
 	return "unshare"
+}
+
+// Whether static host volumes (/usr etc) are remounted read-only. Only the
+// isolation canary tests turn this off.
+var unshareReadonlyStatic = true
+
+// Whether inheritable host descriptors are kept from the machine. Only the
+// isolation canary tests turn this off.
+var unshareCloseFds = true
+
+// Whether the machine gets its own session keyring. Only the isolation canary
+// tests turn this off.
+var unshareNewSessionKeyring = true
+
+// Whether /sys, /proc/sys and /proc/sysrq-trigger are read-only. Only the
+// isolation canary tests turn this off.
+var unshareReadonlyKernelFS = true
+
+// Run fn, which starts and waits for the machine, in a new, empty anonymous
+// session keyring. The invoking session keyring (and the user keyring normally
+// linked into it) would otherwise be possessed by the machine, letting it read
+// the user's keys. Keyrings are part of the thread's credentials and a child
+// inherits those of the thread which forks it, so fn runs on a locked thread
+// which is not unlocked and therefore thrown away when the goroutine exits.
+// The child must also be waited for on that thread, as Pdeathsig fires when
+// the forking thread exits rather than the whole process.
+func inNewSessionKeyring(fn func() error) error {
+	ch := make(chan error, 1)
+	go func() {
+		runtime.LockOSThread()
+		_, _, e := unix.Syscall(unix.SYS_KEYCTL, unix.KEYCTL_JOIN_SESSION_KEYRING, 0, 0)
+		// Without keyring support in the kernel there is nothing to leak
+		if e != 0 && e != unix.ENOSYS {
+			ch <- fmt.Errorf("failed to create a session keyring: %w", e)
+
+			return
+		}
+		ch <- fn()
+	}()
+
+	return <-ch
+}
+
+// Mark every descriptor above stderr close-on-exec. Go opens its own files
+// with O_CLOEXEC, but descriptors inherited from the parent (a shell, a make
+// jobserver) or opened by cgo are not, and would otherwise be passed into the
+// machine. This affects the whole process on purpose: nothing of the host
+// beyond stdio should reach the machine.
+func closeInheritedFds() error {
+	names, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return fmt.Errorf("failed to list open descriptors: %w", err)
+	}
+	for _, n := range names {
+		fd, err := strconv.Atoi(n.Name())
+		if err != nil || fd <= 2 {
+			continue
+		}
+		unix.CloseOnExec(fd)
+	}
+
+	return nil
 }
 
 // Namespaces created for the machine.
@@ -225,6 +290,13 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	//nolint:dupword // "proc" is intentionally repeated as the filesystem type and source.
 	line(`mount -t proc proc "$ROOT/proc"`)
 	line(`mount --rbind /sys "$ROOT/sys"`)
+	// The net and cgroup namespaces are shared so a fresh sysfs can't be
+	// mounted; make the host's read-only instead, submounts (cgroups etc)
+	// included, as machine root is host root when run as root
+	if unshareReadonlyKernelFS {
+		line(`sysmounts=$(findmnt -Rlno TARGET "$ROOT/sys")`)
+		line(`printf '%%s\n' "$sysmounts" | while IFS= read -r t; do mount -o remount,bind,ro "$t" || exit 1; done`)
+	}
 	line(`mount -t tmpfs -o mode=0755,nosuid dev "$ROOT/dev"`)
 	for _, d := range []string{"null", "zero", "full", "random", "urandom", "tty"} {
 		line(`touch "$ROOT/dev/%[1]s" && mount --bind /dev/%[1]s "$ROOT/dev/%[1]s"`, d)
@@ -261,7 +333,7 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 		dst := `"$ROOT"` + q(v.machineDirectory)
 		line("mkdir -p %s", dst)
 		line("mount --rbind %s %s", q(src), dst)
-		if v.static {
+		if v.static && unshareReadonlyStatic {
 			line("mount -o remount,bind,ro %s || echo \"WARNING: failed to make %s read-only\" >&2",
 				dst, q(v.machineDirectory))
 		}
@@ -280,6 +352,15 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 	}
 
 	line(`hostname fakemachine 2>/dev/null || echo fakemachine > "$ROOT/proc/sys/kernel/hostname" || true`)
+
+	// Kernel tunables which aren't namespaced, and sysrq which isn't
+	// capability checked, otherwise reach the host kernel when run as root
+	if unshareReadonlyKernelFS {
+		for _, p := range []string{"sys", "sysrq-trigger"} {
+			line(`mount --bind "$ROOT/proc/%[1]s" "$ROOT/proc/%[1]s"`, p)
+			line(`mount -o remount,bind,ro "$ROOT/proc/%s"`, p)
+		}
+	}
 
 	line("pivot_root . .oldroot")
 	line("cd /")
@@ -438,18 +519,40 @@ func (b unshareBackend) Start() (bool, error) {
 	args := append([]string{unshare}, nsargs...)
 	args = append(args, "/bin/sh", b.setupScriptPath(tmpdir))
 
+	if unshareCloseFds {
+		if err := closeInheritedFds(); err != nil {
+			return false, err
+		}
+	}
+
+	// If fakemachine dies without cleaning up (SIGTERM, SIGKILL), have the
+	// kernel kill unshare; --kill-child then kills the namespace's init and
+	// with it every process in the machine
 	pa := os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+		Sys:   &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL},
 	}
 
-	p, err := os.StartProcess(unshare, args, &pa)
-	if err != nil {
-		return false, fmt.Errorf("failed to start unshare process: %w", err)
-	}
+	var pstate *os.ProcessState
+	run := func() error {
+		p, err := os.StartProcess(unshare, args, &pa)
+		if err != nil {
+			return fmt.Errorf("failed to start unshare process: %w", err)
+		}
+		pstate, err = p.Wait()
+		if err != nil {
+			return fmt.Errorf("error waiting for unshare process: %w", err)
+		}
 
-	pstate, err := p.Wait()
+		return nil
+	}
+	if unshareNewSessionKeyring {
+		err = inNewSessionKeyring(run)
+	} else {
+		err = run()
+	}
 	if err != nil {
-		return false, fmt.Errorf("error waiting for unshare process: %w", err)
+		return false, err
 	}
 
 	if !pstate.Success() {
