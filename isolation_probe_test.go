@@ -42,6 +42,9 @@ type probeInput struct {
 	// Host runtime files (a POSIX shm object, a session socket) which hold
 	// the marker or accept connections; none may be reachable
 	HostRuntime []string
+	// The host lets unprivileged users profile every cpu, so doing so says
+	// nothing about the machine
+	PerfAllowed bool
 }
 
 // What the probe observed from inside; the host judges it against the contract.
@@ -278,7 +281,8 @@ func probeSleeperInProc(cmdline string) bool {
 	return false
 }
 
-func probePrivileges() map[string]string {
+//nolint:gosec // The probe deliberately attempts privileged operations, using unsafe for raw syscalls.
+func probePrivileges(perfAllowed bool) map[string]string {
 	res := map[string]string{}
 
 	f, err := os.OpenFile("/dev/loop-control", os.O_RDWR, 0)
@@ -329,6 +333,52 @@ func probePrivileges() map[string]string {
 	} else {
 		res["swapon"] = e.Error()
 	}
+
+	// Each of these needs a capability in the initial user namespace, and
+	// does nothing harmful when it unexpectedly works
+	now := unix.NsecToTimespec(time.Now().UnixNano())
+	res["clock-settime"] = errName(unix.ClockSettime(unix.CLOCK_REALTIME, &now))
+
+	// BPF_PROG_LOAD of "r0 = 0; exit" as a kprobe program
+	insns := [16]byte{0xb7, 7: 0, 8: 0x95}
+	license := []byte("GPL\x00")
+	var attr [128]byte
+	*(*uint32)(unsafe.Pointer(&attr[0])) = 2 // BPF_PROG_TYPE_KPROBE
+	*(*uint32)(unsafe.Pointer(&attr[4])) = 2 // two instructions
+	*(*uintptr)(unsafe.Pointer(&attr[8])) = uintptr(unsafe.Pointer(&insns[0]))
+	*(*uintptr)(unsafe.Pointer(&attr[16])) = uintptr(unsafe.Pointer(&license[0]))
+	fd, _, e := syscall.Syscall(unix.SYS_BPF, 5 /* BPF_PROG_LOAD */, uintptr(unsafe.Pointer(&attr[0])), uintptr(len(attr)))
+	if e == 0 {
+		_ = syscall.Close(int(fd))
+		res["bpf-prog-load"] = "ok"
+	} else {
+		res["bpf-prog-load"] = e.Error()
+	}
+
+	if !perfAllowed {
+		pa := &unix.PerfEventAttr{Type: unix.PERF_TYPE_SOFTWARE, Config: unix.PERF_COUNT_SW_CPU_CLOCK, Size: unix.PERF_ATTR_SIZE_VER0}
+		pfd, err := unix.PerfEventOpen(pa, -1, 0, -1, 0)
+		if err == nil {
+			_ = unix.Close(pfd)
+		}
+		res["perf-cpu-wide"] = errName(err)
+	}
+
+	// The classic container escape, which needs CAP_DAC_READ_SEARCH
+	handle, _, err := unix.NameToHandleAt(unix.AT_FDCWD, "/", 0)
+	if err == nil {
+		if rootFd, err2 := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY, 0); err2 == nil {
+			hfd, err3 := unix.OpenByHandleAt(rootFd, handle, unix.O_RDONLY)
+			if err3 == nil {
+				_ = unix.Close(hfd)
+			}
+			_ = unix.Close(rootFd)
+			err = err3
+		} else {
+			err = err2
+		}
+	}
+	res["open-by-handle-at"] = errName(err)
 
 	return res
 }
@@ -552,7 +602,7 @@ func TestIsolationProbe(t *testing.T) {
 
 	r := probeReport{
 		NS:   probeNS(),
-		Priv: probePrivileges(),
+		Priv: probePrivileges(in.PerfAllowed),
 		Env:  map[string]string{},
 	}
 	r.Hostname, _ = os.Hostname()

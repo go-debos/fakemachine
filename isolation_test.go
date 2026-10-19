@@ -43,7 +43,8 @@ type hostFixture struct {
 	symlinks    []string // machine paths of symlinks to the secret
 	keyIDs      []int    // host keys holding the marker
 	keyDesc     string
-	shmKey      int      // host SysV segment holding the marker
+	shmKey      int // host SysV segment holding the marker
+	perfAllowed bool
 	runtime     []string // host runtime files which must stay out of reach
 }
 
@@ -124,6 +125,10 @@ func newHostFixture(t *testing.T) *hostFixture {
 	// A world-readable shared memory segment, so only the IPC namespace can
 	// keep it from the machine
 	fx.shmKey = addHostShm(t, marker)
+	if b, err := os.ReadFile("/proc/sys/kernel/perf_event_paranoid"); err == nil {
+		level, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+		fx.perfAllowed = level <= 0
+	}
 
 	// What other programs leave around in the host's runtime directories: a
 	// POSIX shared memory object, and a session socket where there is one
@@ -190,6 +195,7 @@ func (fx *hostFixture) input() probeInput {
 		KeyDesc:        fx.keyDesc,
 		ShmKey:         fx.shmKey,
 		HostRuntime:    fx.runtime,
+		PerfAllowed:    fx.perfAllowed,
 	}
 }
 
