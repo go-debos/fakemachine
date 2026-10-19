@@ -42,6 +42,14 @@ func skipIfBackend(t *testing.T, m *Machine, name, why string) {
 	}
 }
 
+// Skip the test unless running on the host kernel.
+func skipUnlessHostKernel(t *testing.T, m *Machine) {
+	t.Helper()
+	if _, ok := m.backend.(hostKernelBackend); !ok {
+		t.Skipf("only applies to backends running on the host kernel")
+	}
+}
+
 // Skip the test unless running with the named backend.
 func skipUnlessBackend(t *testing.T, m *Machine, name string) {
 	t.Helper()
