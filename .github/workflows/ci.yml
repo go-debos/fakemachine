@@ -103,10 +103,15 @@ jobs:
       run: go test -v -timeout 20m ./... --backend=${{matrix.backend}} | tee test.out
 
     # The job runs as root, where the unshare backend maps every id through;
-    # run again as a user so the subordinate id path is tested too
+    # run again as a user so the subordinate id path is tested too. The
+    # runner's AppArmor policy denies unprivileged user namespaces any
+    # capability; the container is privileged so it can lift that
     - name: Run unit tests (unshare backend, non-root)
       if: matrix.backend == 'unshare'
       run: |
+        if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+          echo 0 > /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+        fi
         useradd -m fmtest
         grep -q '^fmtest:' /etc/subuid || echo 'fmtest:100000:65536' >> /etc/subuid
         grep -q '^fmtest:' /etc/subgid || echo 'fmtest:100000:65536' >> /etc/subgid
