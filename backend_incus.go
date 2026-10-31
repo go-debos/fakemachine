@@ -587,7 +587,17 @@ func (b incusContainerBackend) Start() (bool, error) {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(signals)
 
-	if err := incusCommand("file", "push", "-q", "-r", "-p", path.Join(tmpdir, "root")+"/.", name+"/"); err != nil {
+	// Push each entry of the root rather than root/., which incus 6.0 pushes
+	// to /root instead of /
+	entries, err := os.ReadDir(path.Join(tmpdir, "root"))
+	if err != nil {
+		return false, fmt.Errorf("failed to read root directory: %w", err)
+	}
+	push := []string{"file", "push", "-q", "-r", "-p"}
+	for _, e := range entries {
+		push = append(push, path.Join(tmpdir, "root", e.Name()))
+	}
+	if err := incusCommand(append(push, name+"/")...); err != nil {
 		return false, err
 	}
 
