@@ -325,7 +325,12 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		return false, fmt.Errorf("error waiting for qemu process: %w", err)
 	}
 
-	return pstate.Success(), nil
+	if !pstate.Success() {
+		return false, fmt.Errorf("qemu process failed (%s), command line: %s",
+			pstate, formatCommandLine(qemuargs))
+	}
+
+	return true, nil
 }
 
 // formatCommandLine joins args into a single string, single-quoting any
