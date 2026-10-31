@@ -80,14 +80,27 @@ func getModPath(modname string, kernelRelease string) (string, error) {
 
 // Get all dependent module.
 func getModDepends(modname string, kernelRelease string) ([]string, error) {
+	return getModDependsVisited(modname, kernelRelease, map[string]bool{modname: true})
+}
+
+// getModDependsVisited is getModDepends, skipping the modules in visited so
+// that each dependency is listed once and a dependency cycle cannot recurse
+// forever.
+func getModDependsVisited(modname string, kernelRelease string, visited map[string]bool) ([]string, error) {
 	deplist, err := getModData(modname, "depends", kernelRelease)
 	if err != nil {
 		return nil, err
 	}
 	var modlist []string
 	for _, v := range deplist {
-		if v != "" {
-			modlist = append(modlist, strings.Split(v, ",")...)
+		if v == "" {
+			continue
+		}
+		for mod := range strings.SplitSeq(v, ",") {
+			if !visited[mod] {
+				visited[mod] = true
+				modlist = append(modlist, mod)
+			}
 		}
 	}
 
@@ -96,7 +109,7 @@ func getModDepends(modname string, kernelRelease string) ([]string, error) {
 	// https://github.com/mirror/busybox/blob/1dd2685dcc735496d7adde87ac60b9434ed4a04c/modutils/modprobe.c#L46-L49
 	var sublist []string
 	for _, mod := range modlist {
-		deps, err := getModDepends(mod, kernelRelease)
+		deps, err := getModDependsVisited(mod, kernelRelease, visited)
 		if err != nil {
 			return nil, fmt.Errorf("get dependencies for module %q: %w", mod, err)
 		}
