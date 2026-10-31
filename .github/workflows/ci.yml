@@ -99,6 +99,16 @@ jobs:
       if: matrix.backend == 'unshare' && (startsWith(matrix.os, 'debian') || startsWith(matrix.os, 'ubuntu'))
       run: apt-get update && apt-get install -y --no-install-recommends util-linux-extra uidmap
 
+    # The Arch and Fedora images lack hostname(1), which sets the machine's
+    # hostname when not running as root
+    - name: Install hostname (Arch)
+      if: matrix.backend == 'unshare' && matrix.os == 'arch'
+      run: pacman -Sy --noconfirm inetutils
+
+    - name: Install hostname (Fedora)
+      if: matrix.backend == 'unshare' && startsWith(matrix.os, 'fedora')
+      run: dnf install -y hostname
+
     - name: Run unit tests (${{matrix.backend}} backend)
       run: go test -v -timeout 20m ./... --backend=${{matrix.backend}} | tee test.out
 

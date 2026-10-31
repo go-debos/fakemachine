@@ -13,6 +13,9 @@ never picks it, because it cannot provide disk images (see below).
 - The `unshare` and `pivot_root` binaries from util-linux (2.38 or later for
   `--map-auto`). On Debian and Ubuntu `pivot_root` is in the
   `util-linux-extra` package.
+- The `hostname` binary (the `inetutils` package on Arch, `hostname` on
+  Debian, Ubuntu and Fedora). Without it the machine's hostname is only set
+  when fakemachine runs as root.
 - For ownership other than root (needed by `tar`, `dpkg` and `debootstrap`):
   `newuidmap`/`newgidmap` (the `uidmap` package) and `/etc/subuid` and
   `/etc/subgid` entries for the invoking user. Without these the backend falls
