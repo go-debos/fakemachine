@@ -285,6 +285,7 @@ type Machine struct {
 	sectorSize int
 	showBoot   bool
 	quiet      bool
+	debug      bool
 	mergedUsr  bool
 	Environ    []string
 
@@ -662,6 +663,13 @@ func (m *Machine) SetShowBoot(showBoot bool) {
 // ran.
 func (m *Machine) SetQuiet(quiet bool) {
 	m.quiet = quiet
+}
+
+// SetDebug sets whether to print the command used to start the backend and
+// keep the generated runtime files (e.g. the initrd) after the machine exits,
+// so the backend invocation can be inspected or rerun by hand.
+func (m *Machine) SetDebug(debug bool) {
+	m.debug = debug
 }
 
 // SetScratch sets the size and location of on-disk scratch space to allocate
@@ -1125,6 +1133,11 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 	}
 	m.AddVolumeAt(tmpdir, "/run/fakemachine")
 	defer func() {
+		if m.debug {
+			fmt.Printf("Keeping fakemachine runtime directory %s\n", tmpdir)
+
+			return
+		}
 		if removeErr := os.RemoveAll(tmpdir); removeErr != nil {
 			err = errors.Join(err, fmt.Errorf("failed to remove tempdir %s: %w", tmpdir, removeErr))
 		}
