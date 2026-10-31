@@ -93,7 +93,12 @@ The following are private to the machine:
   host filesystem is visible.
 - PIDs. The machine cannot see or signal host processes. `--kill-child` makes
   sure every process in the machine dies when fakemachine exits.
-- The hostname (UTS namespace) and SysV IPC.
+- The hostname (UTS namespace) and SysV IPC. The hostname is set to
+  `fakemachine` with `hostname(1)`. If that binary is missing, fakemachine
+  falls back to writing `/proc/sys/kernel/hostname`, which only host root may
+  do. When not running as root the fallback fails silently and the machine
+  keeps the host's hostname, although changing it still cannot affect the
+  host.
 - Root identity. The user is uid 0 inside the machine but is mapped to the
   invoking user on the host. Other ids are mapped to the user's first
   subordinate id range. Root in the machine has no more privileges on host

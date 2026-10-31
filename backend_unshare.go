@@ -351,6 +351,11 @@ func (b unshareBackend) Prepare(tmpdir, command string, extracontent [][2]string
 		line("cp %s %s", q(src), dst)
 	}
 
+	// sethostname only needs CAP_SYS_ADMIN in the user namespace owning the
+	// UTS namespace, but writes to /proc/sys/kernel/hostname are checked
+	// against host root. Without hostname(1) the fallback is refused when not
+	// run as root and the machine silently keeps the host's hostname; it is
+	// still isolated, so that isn't treated as fatal
 	line(`hostname fakemachine 2>/dev/null || echo fakemachine > "$ROOT/proc/sys/kernel/hostname" || true`)
 
 	// Kernel tunables which aren't namespaced, and sysrq which isn't
