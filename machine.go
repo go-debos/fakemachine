@@ -1157,6 +1157,10 @@ func (m *Machine) Run(command string) (int, error) {
 // RunInMachineWithArgs runs the caller binary inside the fakemachine with the
 // specified commandline arguments.
 func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
+	if len(os.Args) == 0 {
+		return -1, errors.New("failed to find executable: os.Args is empty")
+	}
+
 	name := path.Join("/", path.Base(os.Args[0]))
 
 	quotedArgs := shellescape.QuoteCommand(args)
@@ -1173,5 +1177,9 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 // RunInMachine runs the caller binary inside the fakemachine with the same
 // commandline arguments as the parent.
 func (m *Machine) RunInMachine() (int, error) {
+	if len(os.Args) == 0 {
+		return -1, errors.New("failed to find executable: os.Args is empty")
+	}
+
 	return m.RunInMachineWithArgs(os.Args[1:])
 }
