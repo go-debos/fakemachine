@@ -75,8 +75,9 @@ It also writes two scripts to `<tmpdir>`, which is mounted at
    and stdout are terminals. `incus exec` returns the command's exit status and
    forwards `SIGINT`; fakemachine forwards `SIGTERM` and `SIGHUP`.
 5. Always deletes the instance with `incus delete --force`, including when
-   interrupted. The instance is not ephemeral, so it and its log
-   (`incus info --show-log`) survive a failed start until then.
+   interrupted. The instance is not ephemeral, so its log
+   (`incus info --show-log`) survives a failed start and is included in the
+   error.
 
 ### Networking
 

@@ -592,7 +592,11 @@ func (b incusContainerBackend) Start() (bool, error) {
 	}
 
 	if err := incusCommand("start", name); err != nil {
-		return false, fmt.Errorf("%w; see incus info --show-log %s", err, name)
+		// The instance is deleted on return, so include its log now
+		//nolint:noctx,gosec // Synchronous operation; the executable is fixed and no shell is invoked.
+		log, _ := exec.Command("incus", "info", "--show-log", name).CombinedOutput()
+
+		return false, fmt.Errorf("%w\n%s", err, strings.TrimSpace(string(log)))
 	}
 
 	tty := "-T"
