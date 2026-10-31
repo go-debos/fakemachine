@@ -80,14 +80,27 @@ func getModPath(modname string, kernelRelease string) (string, error) {
 
 // Get all dependent module.
 func getModDepends(modname string, kernelRelease string) ([]string, error) {
+	return getModDependsVisited(modname, kernelRelease, map[string]bool{modname: true})
+}
+
+// getModDependsVisited is getModDepends, skipping the modules in visited so
+// that each dependency is listed once and a dependency cycle cannot recurse
+// forever.
+func getModDependsVisited(modname string, kernelRelease string, visited map[string]bool) ([]string, error) {
 	deplist, err := getModData(modname, "depends", kernelRelease)
 	if err != nil {
 		return nil, err
 	}
 	var modlist []string
 	for _, v := range deplist {
-		if v != "" {
-			modlist = append(modlist, strings.Split(v, ",")...)
+		if v == "" {
+			continue
+		}
+		for mod := range strings.SplitSeq(v, ",") {
+			if !visited[mod] {
+				visited[mod] = true
+				modlist = append(modlist, mod)
+			}
 		}
 	}
 
@@ -96,7 +109,7 @@ func getModDepends(modname string, kernelRelease string) ([]string, error) {
 	// https://github.com/mirror/busybox/blob/1dd2685dcc735496d7adde87ac60b9434ed4a04c/modutils/modprobe.c#L46-L49
 	var sublist []string
 	for _, mod := range modlist {
-		deps, err := getModDepends(mod, kernelRelease)
+		deps, err := getModDependsVisited(mod, kernelRelease, visited)
 		if err != nil {
 			return nil, fmt.Errorf("get dependencies for module %q: %w", mod, err)
 		}
@@ -363,7 +376,13 @@ func InMachine() bool {
 
 // Supported reports whether any backend can be used on this host.
 func Supported() bool {
-	_, err := newBackend("auto", nil)
+	// The backends need a machine to look up the host architecture.
+	arch, ok := archMap[runtime.GOARCH]
+	if !ok {
+		return false
+	}
+
+	_, err := newBackend("auto", &Machine{arch: arch})
 
 	return err == nil
 }
@@ -1173,6 +1192,10 @@ func (m *Machine) Run(command string) (int, error) {
 // RunInMachineWithArgs runs the caller binary inside the fakemachine with the
 // specified commandline arguments.
 func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
+	if len(os.Args) == 0 {
+		return -1, errors.New("failed to find executable: os.Args is empty")
+	}
+
 	name := path.Join("/", path.Base(os.Args[0]))
 
 	quotedArgs := shellescape.QuoteCommand(args)
@@ -1189,5 +1212,9 @@ func (m *Machine) RunInMachineWithArgs(args []string) (int, error) {
 // RunInMachine runs the caller binary inside the fakemachine with the same
 // commandline arguments as the parent.
 func (m *Machine) RunInMachine() (int, error) {
+	if len(os.Args) == 0 {
+		return -1, errors.New("failed to find executable: os.Args is empty")
+	}
+
 	return m.RunInMachineWithArgs(os.Args[1:])
 }
