@@ -1,13 +1,16 @@
 //go:build linux
-// +build linux
 
+// Package fakemachine runs commands inside a minimal virtual machine that
+// boots the host's kernel and shares the host's /usr, so tools that need root
+// privileges (mounting, loop devices, chroots, ...) can be run as an
+// unprivileged user.
 package fakemachine
 
 import (
 	"fmt"
 )
 
-// List of backends in order of their priority in the "auto" algorithm
+// List of backends in order of their priority in the "auto" algorithm.
 func implementedBackends(m *Machine) []backend {
 	return []backend{
 		newKvmBackend(m),
@@ -15,9 +18,8 @@ func implementedBackends(m *Machine) []backend {
 	}
 }
 
-/* A list of backends which are implemented - sorted in order in which the
- * "auto" backend chooses them.
- */
+// BackendNames returns the names accepted by NewMachineWithBackend: "auto"
+// followed by each implemented backend in the order "auto" tries them.
 func BackendNames() []string {
 	names := []string{"auto"}
 
@@ -54,10 +56,13 @@ func newBackend(name string, m *Machine) (backend, error) {
 				} else {
 					err = backendErr
 				}
+
 				continue
 			}
+
 			return b, nil
 		}
+
 		return nil, err
 	}
 
