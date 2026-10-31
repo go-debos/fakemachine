@@ -763,13 +763,6 @@ func TestIsolation(t *testing.T) {
 
 			return checkShm(c, r)
 		},
-		"keyring": func() error {
-			if len(fx.keyIDs) == 0 {
-				return fmt.Errorf("no host key could be added, the keyring was not tested")
-			}
-			t.Logf("keyctl from the machine: %v", r.Keys)
-			return checkKeyring(c, r)
-		},
 	}
 	names := make([]string, 0, len(checks))
 	for n := range checks {
@@ -781,6 +774,16 @@ func TestIsolation(t *testing.T) {
 			require.NoError(t, checks[n]())
 		})
 	}
+
+	// Container runtimes' default seccomp profiles refuse add_key, so there
+	// may be no host key to leak
+	t.Run("keyring", func(t *testing.T) {
+		if len(fx.keyIDs) == 0 {
+			t.Skip("no host key could be added, the keyring was not tested")
+		}
+		t.Logf("keyctl from the machine: %v", r.Keys)
+		require.NoError(t, checkKeyring(c, r))
+	})
 
 	t.Run("fds", func(t *testing.T) {
 		// Other descriptors are the Go runtime's and the test binary's, so
