@@ -280,6 +280,7 @@ type hostSnapshot struct {
 	Loops    []string
 	Binfmt   []string
 	Procs    []string
+	Incus    []string
 	Cgroups  []string // fm-probe-* directories anywhere in the cgroup tree
 }
 
@@ -308,6 +309,7 @@ func takeSnapshot(t *testing.T, marker string) hostSnapshot {
 	s.Loops = globNames("/sys/block/loop*/loop/backing_file")
 	s.Binfmt = globNames("/proc/sys/fs/binfmt_misc/*")
 	s.Procs = procsWithMarker(marker)
+	s.Incus = incusInstances(t)
 	_ = filepath.WalkDir("/sys/fs/cgroup", func(p string, d os.DirEntry, err error) error {
 		if err == nil && d.IsDir() && strings.HasPrefix(d.Name(), "fm-probe-") {
 			s.Cgroups = append(s.Cgroups, p)
@@ -317,6 +319,31 @@ func takeSnapshot(t *testing.T, marker string) hostSnapshot {
 	})
 
 	return s
+}
+
+// Names of the host's fakemachine incus instances; nil when incus is not
+// installed, since then no backend can create any.
+func incusInstances(t *testing.T) []string {
+	t.Helper()
+	if _, err := exec.LookPath("incus"); err != nil {
+		return nil
+	}
+	//nolint:noctx // Synchronous query; incus is resolved from PATH.
+	out, err := exec.Command("incus", "list", "--format", "csv", "--columns", "n").Output()
+	if err != nil {
+		t.Logf("listing incus instances: %v", err)
+
+		return nil
+	}
+	var names []string
+	for n := range strings.FieldsSeq(string(out)) {
+		if strings.HasPrefix(n, "fakemachine-") {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+
+	return names
 }
 
 // Processes whose cmdline is exactly argv.
@@ -374,6 +401,7 @@ func diffSnapshot(before, after hostSnapshot) []string {
 	cmp("loop device", before.Loops, after.Loops)
 	cmp("binfmt", before.Binfmt, after.Binfmt)
 	cmp("process", before.Procs, after.Procs)
+	cmp("incus instance", before.Incus, after.Incus)
 	cmp("cgroup", before.Cgroups, after.Cgroups)
 
 	return d
@@ -924,6 +952,7 @@ func TestIsolationSignals(t *testing.T) {
 		t.Run(sig.String(), func(t *testing.T) {
 			digits := randDigits(t)
 			argv := "sleep\x003600." + digits + "\x00"
+			instances := incusInstances(t)
 			//nolint:noctx,gosec // Synchronous helper; it reruns this test binary with fixed arguments.
 			cmd := exec.Command(os.Args[0], "-test.run", "^TestIsolationSignalHelper$",
 				"-backend", backendName)
@@ -951,6 +980,21 @@ func TestIsolationSignals(t *testing.T) {
 				return len(procsWithArgv(argv)) == 0
 			}, 15*time.Second, 100*time.Millisecond,
 				"machine processes survived %s of fakemachine: %v", sig, procsWithArgv(argv))
+
+			// An incus instance whose processes are gone must still be deleted
+			var leftover []string
+			for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(500 * time.Millisecond) {
+				leftover = nil
+				for _, n := range incusInstances(t) {
+					if !slices.Contains(instances, n) {
+						leftover = append(leftover, n)
+					}
+				}
+				if len(leftover) == 0 {
+					break
+				}
+			}
+			require.Empty(t, leftover, "incus instances survived %s of fakemachine", sig)
 		})
 	}
 }

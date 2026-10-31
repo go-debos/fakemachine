@@ -59,6 +59,17 @@ var contracts = map[string]isolationContract{
 		SysReadonly:       true,
 		ProcSysReadonly:   true,
 	},
+	"incus": {
+		HostKernel: true,
+		PrivateNS:  []string{"user", "mnt", "pid", "uts", "ipc", "net", "cgroup"},
+		// An incus container has its own network namespace, so the host's
+		// abstract sockets are unreachable
+		AbstractSocketReachable: false,
+		ReadonlyStatic:          true,
+		SysReadonly:             true,
+		RootMapsToInvoker:       true,
+		RandomMachineID:         true,
+	},
 	// The VM backends have their own kernel, so only the filesystem, process
 	// and environment views are asserted
 	"kvm":  {},
