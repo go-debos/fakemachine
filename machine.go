@@ -363,7 +363,13 @@ func InMachine() bool {
 
 // Supported reports whether any backend can be used on this host.
 func Supported() bool {
-	_, err := newBackend("auto", nil)
+	// The backends need a machine to look up the host architecture.
+	arch, ok := archMap[runtime.GOARCH]
+	if !ok {
+		return false
+	}
+
+	_, err := newBackend("auto", &Machine{arch: arch})
 
 	return err == nil
 }
