@@ -220,8 +220,9 @@ func TestMemory(t *testing.T) {
 	// testing
 	command := `
 MEM=$(grep MemTotal /proc/meminfo  | awk ' { print $2 } ' )
-# MemTotal is usable ram, not physical ram so accept a range
-if [ ${MEM} -lt 900000 -o ${MEM} -gt 1024000 ] ; then
+# MemTotal is usable ram, not physical ram so accept a range; incus (lxcfs)
+# reports exactly the limit
+if [ ${MEM} -lt 900000 -o ${MEM} -gt 1048576 ] ; then
   exit 1
 fi
 `
