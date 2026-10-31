@@ -128,7 +128,5 @@ cgroup limit in `/sys/fs/cgroup/memory.max` always applies.
 - **VM mode.** An `incus-vm` backend which boots fakemachine's kernel and initrd
   in an Incus VM, attaching images and scratch as disk devices, to provide
   images without `/dev/kvm` access for the user.
-- **CI.** A job which installs Incus, runs `incus admin init --minimal` and
-  runs the tests with `-backend=incus`.
 - **Remote servers.** The backend assumes the default remote is local, since
   volumes are host paths.

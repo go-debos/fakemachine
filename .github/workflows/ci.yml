@@ -150,6 +150,35 @@ jobs:
     - name: Run DNS resolution test (qemu backend)
       run: go test -v -run TestNetworkDNS ./... --backend=qemu | tee test.out
 
+  # incusd can't run inside the test containers, so test on the runner itself
+  test-incus:
+    name: Test ubuntu-latest with incus backend
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    # Map the runner user to root in the machine, so the raw.idmap path is
+    # tested rather than shifted volumes
+    - name: Install and set up incus
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends incus
+        echo "root:$(id -u):1" | sudo tee -a /etc/subuid
+        echo "root:$(id -g):1" | sudo tee -a /etc/subgid
+        sudo systemctl restart incus
+        sudo incus admin init --minimal
+        sudo usermod -aG incus-admin "$USER"
+        # Docker's FORWARD policy drops the traffic of the incus bridge
+        sudo iptables -P FORWARD ACCEPT
+
+    - name: Run unit tests (incus backend)
+      run: sg incus-admin -c "go test -v ./... --backend=incus"
+
   build-container:
     name: Build Docker container
     runs-on: ubuntu-latest
@@ -159,6 +188,7 @@ jobs:
     needs:
       - golangci
       - test
+      - test-incus
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
@@ -217,6 +247,7 @@ jobs:
       - golangci
       - man-page
       - test
+      - test-incus
       - build-container
     runs-on: ubuntu-latest
     steps:
