@@ -588,12 +588,13 @@ func (b incusContainerBackend) Start() (bool, error) {
 	defer signal.Stop(signals)
 
 	// Push each entry of the root rather than root/., which incus 6.0 pushes
-	// to /root instead of /
+	// to /root instead of /. No -p as / exists and incus 6.0 opens the first
+	// source for it, failing on symlinks such as /bin which dangle on the host
 	entries, err := os.ReadDir(path.Join(tmpdir, "root"))
 	if err != nil {
 		return false, fmt.Errorf("failed to read root directory: %w", err)
 	}
-	push := []string{"file", "push", "-q", "-r", "-p"}
+	push := []string{"file", "push", "-q", "-r"}
 	for _, e := range entries {
 		push = append(push, path.Join(tmpdir, "root", e.Name()))
 	}
