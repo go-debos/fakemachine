@@ -391,11 +391,19 @@ const networkdTemplate = `
 [Match]
 Type=ether
 
+[Link]
+# QEMU user networking always offers both DHCPv4 and IPv6 router
+# advertisements; wait for both so IPv6-only hosts work reliably
+RequiredForOnline=routable
+RequiredFamilyForOnline=both
+
 [Network]
 DHCP=ipv4
-# Disable link-local address to speedup boot
-LinkLocalAddressing=no
-IPv6AcceptRA=no
+# IPv6 link-local is needed to receive router advertisements
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=yes
+# The only other node on the link is QEMU itself; skip DAD to speedup boot
+IPv6DuplicateAddressDetection=0
 `
 
 const networkdLinkTemplate = `
