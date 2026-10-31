@@ -1,2 +1,6 @@
 /fakemachine
 .*swp
+
+# Generated man page
+/doc/man/fakemachine.1
+/doc/man/fakemachine.md
