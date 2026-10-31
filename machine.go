@@ -361,6 +361,18 @@ func InMachine() bool {
 	return inMachine
 }
 
+// InMachineBackend returns the name of the backend the current process is
+// running under, or an empty string when not running in a fakemachine. Lets
+// the command adapt to limitations of a backend, e.g. the unshare backend
+// being unable to run systemd-nspawn.
+func InMachineBackend() string {
+	if !InMachine() {
+		return ""
+	}
+
+	return os.Getenv("FAKEMACHINE_BACKEND")
+}
+
 // Supported reports whether any backend can be used on this host.
 func Supported() bool {
 	_, err := newBackend("auto", nil)
@@ -445,7 +457,7 @@ done
 
 // The line 'Environment=%[2]s' is used for environment variables optionally
 // configured using Machine.SetEnviron(). '%[3]s' can be used to set additional
-// systemd service dependencies.
+// systemd service dependencies. '%[4]s' is the name of the backend.
 const serviceTemplate = `
 [Unit]
 Description=fakemachine runner
@@ -457,7 +469,7 @@ After=basic.target binfmt-support.service systemd-networkd.service %[3]s
 OnFailure=poweroff.target
 
 [Service]
-Environment=HOME=/root IN_FAKE_MACHINE=yes %[2]s
+Environment=HOME=/root IN_FAKE_MACHINE=yes FAKEMACHINE_BACKEND=%[4]s %[2]s
 WorkingDirectory=-/scratch
 ExecStart=/wrapper
 ExecStopPost=/bin/sync
@@ -812,7 +824,8 @@ func (m *Machine) cleanup() error {
 		return nil
 	}
 
-	if err := os.Remove(m.scratchfile); err != nil {
+	// The unshare backend uses a scratch directory rather than an image
+	if err := os.RemoveAll(m.scratchfile); err != nil {
 		return fmt.Errorf("failed to remove scratchfile %q: %w", m.scratchfile, err)
 	}
 
@@ -1019,7 +1032,8 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 	}
 
 	err = w.WriteFile("etc/systemd/system/fakemachine.service",
-		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " "), resolvDep), 0o644)
+		fmt.Sprintf(serviceTemplate, m.backend.JobOutputTTY(), strings.Join(m.Environ, " "), resolvDep,
+			m.backend.Name()), 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to write fakemachine.service: %w", err)
 	}
@@ -1111,14 +1125,20 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 		}
 	}()
 
-	err = m.setupscratch()
-	if err != nil {
-		return -1, err
-	}
+	if hk, ok := m.backend.(hostKernelBackend); ok {
+		if err := hk.Prepare(tmpdir, command, extracontent); err != nil {
+			return -1, fmt.Errorf("failed to prepare %s backend: %w", m.backend.Name(), err)
+		}
+	} else {
+		err = m.setupscratch()
+		if err != nil {
+			return -1, err
+		}
 
-	m.initrdpath = path.Join(tmpdir, "initramfs.cpio")
-	if err := m.buildInitrd(command, extracontent); err != nil {
-		return -1, err
+		m.initrdpath = path.Join(tmpdir, "initramfs.cpio")
+		if err := m.buildInitrd(command, extracontent); err != nil {
+			return -1, err
+		}
 	}
 
 	if !m.quiet {

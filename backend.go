@@ -15,7 +15,16 @@ func implementedBackends(m *Machine) []backend {
 	return []backend{
 		newKvmBackend(m),
 		newQemuBackend(m),
+		newUnshareBackend(m),
+		newIncusContainerBackend(m),
 	}
+}
+
+// Backends which are only used when requested explicitly, never by "auto";
+// they run on the host kernel so can't provide images.
+var explicitOnlyBackends = map[string]bool{
+	"unshare": true,
+	"incus":   true,
 }
 
 // BackendNames returns the names accepted by NewMachineWithBackend: "auto"
@@ -41,9 +50,14 @@ func newBackend(name string, m *Machine) (backend, error) {
 	var b backend
 	var err error
 
+	//nolint:nestif // Trying each backend in turn is clearer kept inline.
 	if name == "auto" {
 		for _, backend := range backends {
 			backendName := backend.Name()
+
+			if explicitOnlyBackends[backendName] {
+				continue
+			}
 
 			b, backendErr := newBackend(backendName, m)
 			if backendErr != nil {
@@ -118,4 +132,12 @@ type backend interface {
 
 	// Start an instance of the backend
 	Start() (bool, error)
+}
+
+// Implemented by backends which run the command directly on the host kernel
+// and so need no kernel or initrd; Prepare replaces the scratch disk and initrd
+// setup done for VM backends and must arrange for the exit code of the command
+// to be written to /run/fakemachine/result.
+type hostKernelBackend interface {
+	Prepare(tmpdir, command string, extracontent [][2]string) error
 }
