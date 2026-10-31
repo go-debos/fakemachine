@@ -126,6 +126,66 @@ jobs:
     - name: Run DNS resolution test (qemu backend)
       run: go test -v -run TestNetworkDNS ./... --backend=qemu | tee test.out
 
+  test-host-network:
+    # GitHub runners have no IPv6 internet access, so run fakemachine on an
+    # isolated Docker network and fetch from a local HTTP server instead. This
+    # checks the guest networking works on IPv4-only, IPv6-only and dual-stack
+    # hosts.
+    strategy:
+      fail-fast: false
+      matrix:
+        network:
+          - name: ipv4
+            flags: ""
+          - name: ipv6
+            flags: --ipv6 --ipv4=false --subnet fd00:fa4f::/64
+          - name: dual
+            flags: --ipv6 --subnet fd00:fa4f::/64
+        backend:
+          - qemu
+          - kvm
+    name: Test ${{matrix.network.name}} host network with ${{matrix.backend}} backend
+    runs-on: 'ubuntu-latest'
+    defaults:
+      run:
+        shell: bash
+    env:
+      IMAGE: ghcr.io/go-debos/test-containers/debian-trixie:main
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    # Build on the default network as the isolated one may lack internet access
+    - name: Build test binary
+      run: |
+        docker run --rm -v "$PWD:/src" -w /src "$IMAGE" \
+          go test -buildvcs=false -c -o fakemachine.test .
+
+    - name: Create ${{matrix.network.name}} network
+      run: |
+        docker network create ${{matrix.network.flags}} fm-net
+        docker network inspect fm-net
+
+    - name: Start HTTP server
+      run: |
+        # Use a dotted name as resolved in the guest does not resolve single
+        # label names over unicast DNS
+        docker run -d --rm --name httpserver --network fm-net \
+          --network-alias httpserver.test busybox \
+          sh -c 'mkdir /www && echo ok > /www/index.html && exec httpd -f -p 80 -h /www'
+
+    - name: Run network test (${{matrix.backend}} backend)
+      run: |
+        docker run --rm --network fm-net \
+          --security-opt label=disable \
+          --cap-add=SYS_PTRACE \
+          --tmpfs /scratch:exec \
+          -e TMP=/scratch \
+          ${{ matrix.backend == 'kvm' && '--device /dev/kvm' || '' }} \
+          -v "$PWD:/src" -w /src "$IMAGE" \
+          ./fakemachine.test -test.v -test.run TestNetworkHTTP \
+            -backend=${{matrix.backend}} -network-url=http://httpserver.test/
+
   build-container:
     name: Build Docker container
     runs-on: ubuntu-latest
@@ -193,6 +253,7 @@ jobs:
       - golangci
       - man-page
       - test
+      - test-host-network
       - build-container
     runs-on: ubuntu-latest
     steps:
