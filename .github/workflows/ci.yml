@@ -193,7 +193,9 @@ jobs:
         sudo iptables -P FORWARD ACCEPT
 
     - name: Run unit tests (incus backend)
-      run: sg incus-admin -c "go test -v ./... --backend=incus"
+      # sudo picks up the new incus-admin group as a supplementary group,
+      # whereas sg would make it the primary group, which isn't in subgid
+      run: sudo -E -u "$USER" env "PATH=$PATH" go test -v ./... --backend=incus
 
   build-container:
     name: Build Docker container
