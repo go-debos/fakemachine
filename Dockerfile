@@ -33,7 +33,8 @@ RUN rm /etc/kernel/postinst.d/*
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         linux-image-amd64 \
-        qemu-system-x86 && \
+        qemu-system-x86 \
+        virtiofsd && \
     rm -rf /var/lib/apt/lists/*
 
 ARG DEBIAN_FRONTEND
