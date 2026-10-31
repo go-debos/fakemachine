@@ -178,11 +178,12 @@ jobs:
         go-version-file: go.mod
 
     # Map the runner user to root in the machine, so the raw.idmap path is
-    # tested rather than shifted volumes
+    # tested rather than shifted volumes. dnsmasq is only a recommend of
+    # incus, but creating the default bridge needs it
     - name: Install and set up incus
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends incus
+        sudo apt-get install -y --no-install-recommends incus dnsmasq-base
         echo "root:$(id -u):1" | sudo tee -a /etc/subuid
         echo "root:$(id -g):1" | sudo tee -a /etc/subgid
         sudo systemctl restart incus
