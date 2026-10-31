@@ -310,6 +310,10 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		return false, err
 	}
 
+	if m.debug {
+		fmt.Printf("Running qemu: %s\n", formatCommandLine(qemuargs))
+	}
+
 	p, err := os.StartProcess(qemubin, qemuargs, &pa)
 	if err != nil {
 		return false, fmt.Errorf("failed to start qemu process: %w", err)
@@ -322,6 +326,21 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	}
 
 	return pstate.Success(), nil
+}
+
+// formatCommandLine joins args into a single string, single-quoting any
+// argument containing shell metacharacters so the result can be pasted
+// into a shell.
+func formatCommandLine(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		if arg == "" || strings.ContainsAny(arg, " \t\n\"'\\$`;&|<>()*?[]{}~#!") {
+			arg = "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+		}
+		quoted[i] = arg
+	}
+
+	return strings.Join(quoted, " ")
 }
 
 type kvmBackend struct {
