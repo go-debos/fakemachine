@@ -379,6 +379,10 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	kernelPath, err = extractUKIKernel(kernelPath, path.Join(path.Dir(m.initrdpath), "linux"))
+	if err != nil {
+		return false, err
+	}
 	kernelPath, err = unpackZboot(kernelPath, path.Join(path.Dir(m.initrdpath), "kernel"))
 	if err != nil {
 		return false, err
