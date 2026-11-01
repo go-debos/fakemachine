@@ -96,7 +96,8 @@ type backend interface {
 	// values; a new map is returned on each call
 	DefaultOptions() map[string]string
 
-	// The backend specific options mapped to the values the backend uses
+	// The backend specific options mapped to the values the backend uses,
+	// e.g. the path of the host kernel when no kernel-path is set
 	Options() (map[string]string, error)
 
 	// Get kernel release version
@@ -105,7 +106,8 @@ type backend interface {
 	// The path to the kernel
 	KernelPath() (kernelPath string, err error)
 
-	// The path to the modules
+	// The path to the modules; "" if InitModules is empty and no modules
+	// are needed
 	ModulePath() (moddir string, err error)
 
 	// A list of udev rules
