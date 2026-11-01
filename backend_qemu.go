@@ -296,7 +296,8 @@ func (b qemuBackend) ModulePath() (string, error) {
 	}
 	if _, err := os.Stat(moddir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("module directory not found at %s: %w", moddir, err)
+			return "", fmt.Errorf("module directory not found at %s, "+
+				"see the kernel requirements in the fakemachine README: %w", moddir, err)
 		}
 
 		return "", fmt.Errorf("stat %s: %w", moddir, err)

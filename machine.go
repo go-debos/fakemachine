@@ -139,7 +139,8 @@ var suffixes = map[string]writerhelper.Transformer{
 func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, release string, basedir string, copiedModules map[string]bool) error {
 	modpath, err := getModPath(modname, release, basedir)
 	if err != nil {
-		return fmt.Errorf("kernel module %q not found for kernel release %q: %w", modname, release, err)
+		return fmt.Errorf("kernel module %q not found for kernel release %q, "+
+			"see the kernel requirements in the fakemachine README: %w", modname, release, err)
 	}
 
 	if modpath == "(builtin)" || copiedModules[modname] {
@@ -849,7 +850,8 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 
 	for _, v := range modfiles {
 		if err := w.CopyFileTo(path.Join(moddir, v), path.Join(destdir, v)); err != nil {
-			return fmt.Errorf("failed to copy kernel module file %s: %w", path.Join(moddir, v), err)
+			return fmt.Errorf("failed to copy kernel module file %s, "+
+				"see the kernel requirements in the fakemachine README: %w", path.Join(moddir, v), err)
 		}
 	}
 
