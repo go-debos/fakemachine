@@ -401,6 +401,15 @@ const initScript = `#!/bin/busybox sh
 busybox mount -t proc proc /proc
 busybox mount -t sysfs none /sys
 
+# report an error on the console and the job output, then power off
+fail() {
+  echo "fakemachine: $1" > /dev/console
+{{- if ne .Backend.JobOutputTTY "/dev/console" }}
+  busybox mount -t devtmpfs devtmpfs /dev && echo "fakemachine: $1" > {{ .Backend.JobOutputTTY }}
+{{- end }}
+  busybox poweroff -f
+}
+
 # probe additional modules
 {{ range $m := .Backend.InitModules }}
 busybox modprobe {{ $m }}
@@ -408,7 +417,7 @@ busybox modprobe {{ $m }}
 
 # mount static volumes
 {{ range $point := StaticVolumes .Machine }}
-{{ MountVolume $.Backend $point }}
+{{ MountVolume $.Backend $point }} || fail "failed to mount {{ MachineDirectory $point }}, the kernel may lack required drivers, see the kernel requirements in the fakemachine README"
 {{ end }}
 
 exec /lib/systemd/systemd
@@ -515,6 +524,12 @@ func tmplMountVolume(b backend, m mountPoint) string {
 	return strings.Join(mntCommand, " ")
 }
 
+// helper function to return the directory a mountpoint is mounted at in the
+// machine, since the machineDirectory field is unexported.
+func tmplMachineDirectory(m mountPoint) string {
+	return m.machineDirectory
+}
+
 // helper function to return the static volumes from a machine, since the mounts variable is unexported
 // include the extra static mounts from the backend.
 func tmplStaticVolumes(m Machine) []mountPoint {
@@ -530,8 +545,9 @@ func tmplStaticVolumes(m Machine) []mountPoint {
 
 func executeInitScriptTemplate(m *Machine, b backend) ([]byte, error) {
 	helperFuncs := template.FuncMap{
-		"MountVolume":   tmplMountVolume,
-		"StaticVolumes": tmplStaticVolumes,
+		"MachineDirectory": tmplMachineDirectory,
+		"MountVolume":      tmplMountVolume,
+		"StaticVolumes":    tmplStaticVolumes,
 	}
 
 	type templateVars struct {

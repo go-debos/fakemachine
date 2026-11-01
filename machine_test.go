@@ -296,6 +296,14 @@ func TestBackendOptionUnknown(t *testing.T) {
 	require.Equal(t, m.DefaultBackendOptions(), m.BackendOptions())
 }
 
+func TestInitScriptTemplate(t *testing.T) {
+	m := CreateMachine(t)
+
+	init, err := executeInitScriptTemplate(m, m.backend)
+	require.NoError(t, err)
+	require.Contains(t, string(init), `fail "failed to mount /usr,`)
+}
+
 func TestImageLabelUniqueness(t *testing.T) {
 	m := CreateMachine(t)
 
