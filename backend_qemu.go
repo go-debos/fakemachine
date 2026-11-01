@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -29,6 +30,10 @@ func (b qemuBackend) Name() string {
 
 func (b qemuBackend) Supported() (bool, error) {
 	if _, err := b.QemuPath(); err != nil {
+		return false, err
+	}
+
+	if _, err := b.VirtiofsdPath(); err != nil {
 		return false, err
 	}
 
@@ -71,6 +76,28 @@ func (b qemuBackend) QemuPath() (string, error) {
 	path, err := exec.LookPath(machine.binary)
 	if err != nil {
 		return "", fmt.Errorf("failed to find qemu binary %s: %w", machine.binary, err)
+	}
+
+	return path, nil
+}
+
+/* virtiofsd is usually installed outside of PATH, so check the locations
+ * used by the distributions first. */
+var virtiofsdPaths = []string{
+	"/usr/libexec/virtiofsd",
+	"/usr/lib/virtiofsd",
+}
+
+func (b qemuBackend) VirtiofsdPath() (string, error) {
+	for _, p := range virtiofsdPaths {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+
+	path, err := exec.LookPath("virtiofsd")
+	if err != nil {
+		return "", fmt.Errorf("failed to find virtiofsd binary: %w", err)
 	}
 
 	return path, nil
@@ -208,11 +235,11 @@ func (b qemuBackend) JobOutputTTY() string {
 }
 
 func (b qemuBackend) MountParameters(_ mountPoint) (string, []string) {
-	return "9p", []string{"trans=virtio", "version=9p2000.L", "cache=loose", "msize=262144"}
+	return "virtiofs", []string{"defaults"}
 }
 
 func (b qemuBackend) InitModules() []string {
-	return []string{"virtio_pci", "virtio_console", "9pnet_virtio", "9p"}
+	return []string{"virtio_pci", "virtio_console", "virtiofs"}
 }
 
 func (b qemuBackend) InitStaticVolumes() []mountPoint {
@@ -223,7 +250,70 @@ func (b qemuBackend) Start() (bool, error) {
 	return b.StartQemu(false)
 }
 
-func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
+// startVirtiofsd starts a virtiofsd process sharing the mount point's host
+// directory on a socket created in socketDir. The listening socket is
+// created before virtiofsd is started, so qemu can connect to it straight
+// away. The returned command may be non-nil even on error, in which case
+// the virtiofsd process was started and still needs to be stopped.
+func (b qemuBackend) startVirtiofsd(virtiofsd string, socketDir string, point mountPoint) (_ *exec.Cmd, _ string, err error) {
+	socketPath := path.Join(socketDir, point.label+".sock")
+	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create virtiofsd socket %s: %w", socketPath, err)
+	}
+	l.SetUnlinkOnClose(false)
+	defer func() {
+		if closeErr := l.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close virtiofsd socket %s: %w", socketPath, closeErr))
+		}
+	}()
+
+	f, err := l.File()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get virtiofsd socket file: %w", err)
+	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close virtiofsd socket file %s: %w", socketPath, closeErr))
+		}
+	}()
+
+	args := []string{
+		"--fd", "3",
+		"--shared-dir", point.hostDirectory,
+		"--sandbox", "none",
+		"--log-level", "error",
+		/* File handles need CAP_DAC_READ_SEARCH, which e.g. docker
+		 * containers lack; since virtiofsd 1.14 root defaults to
+		 * "prefer", which fails to start without it */
+		"--inode-file-handles=never",
+		/* The host directories aren't expected to change behind the
+		 * guest's back, so cache aggressively like 9p's cache=loose did;
+		 * the default revalidation makes booting much slower without kvm */
+		"--cache=always",
+	}
+
+	/* An unprivileged virtiofsd can't change file ownership, squash all
+	 * guest ids to our own so e.g. chown in the guest doesn't fail */
+	if uid := os.Getuid(); uid != 0 {
+		args = append(args,
+			"--translate-uid", fmt.Sprintf("squash-guest:0:%d:4294967295", uid),
+			"--translate-gid", fmt.Sprintf("squash-guest:0:%d:4294967295", os.Getgid()))
+	}
+
+	//nolint:noctx,gosec // virtiofsd is found by VirtiofsdPath and no shell is invoked.
+	cmd := exec.Command(virtiofsd, args...)
+	cmd.ExtraFiles = []*os.File{f}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return nil, "", fmt.Errorf("failed to start virtiofsd for %s: %w", point.hostDirectory, err)
+	}
+
+	return cmd, socketPath, nil
+}
+
+func (b qemuBackend) StartQemu(kvm bool) (_ bool, err error) {
 	m := b.machine
 	qemuMachine := qemuMachines[m.arch]
 
@@ -242,6 +332,8 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		"-display", "none",
 		"-nic", "user,model=virtio-net-pci",
 		"-no-reboot",
+		// virtiofs requires the guest memory to be shared with virtiofsd
+		"-object", fmt.Sprintf("memory-backend-memfd,id=mem,size=%dM,share=on", m.memory),
 	}
 
 	if kvm {
@@ -252,7 +344,7 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		qemuargs = append(qemuargs, "-cpu", qemuMachine.qemuCPU)
 	}
 
-	qemuargs = append(qemuargs, "-machine", qemuMachine.machine)
+	qemuargs = append(qemuargs, "-machine", qemuMachine.machine+",memory-backend=mem")
 	console := fmt.Sprintf("console=%s", qemuMachine.console)
 	kernelargs := []string{
 		console, "panic=-1",
@@ -285,10 +377,43 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 			"-device", "virtconsole,chardev=for-hvc0")
 	}
 
+	virtiofsd, err := b.VirtiofsdPath()
+	if err != nil {
+		return false, err
+	}
+
+	socketDir, err := os.MkdirTemp("", "fakemachine-virtiofsd-")
+	if err != nil {
+		return false, fmt.Errorf("failed to create virtiofsd socket directory: %w", err)
+	}
+	defer func() {
+		if removeErr := os.RemoveAll(socketDir); removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to remove virtiofsd socket directory %s: %w", socketDir, removeErr))
+		}
+	}()
+
+	// virtiofsd exits once qemu disconnects; make sure it also goes
+	// away if qemu fails to start
+	var daemons []*exec.Cmd
+	defer func() {
+		for _, d := range daemons {
+			_ = d.Process.Kill()
+			_ = d.Wait()
+		}
+	}()
+
 	for _, point := range m.mounts {
-		qemuargs = append(qemuargs, "-virtfs",
-			fmt.Sprintf("local,mount_tag=%s,path=%s,security_model=none,multidevs=remap",
-				point.label, point.hostDirectory))
+		daemon, socketPath, err := b.startVirtiofsd(virtiofsd, socketDir, point)
+		if daemon != nil {
+			daemons = append(daemons, daemon)
+		}
+		if err != nil {
+			return false, err
+		}
+
+		qemuargs = append(qemuargs,
+			"-chardev", fmt.Sprintf("socket,id=char-%s,path=%s", point.label, socketPath),
+			"-device", fmt.Sprintf("vhost-user-fs-pci,chardev=char-%s,tag=%s", point.label, point.label))
 	}
 
 	for i, img := range m.images {
