@@ -37,9 +37,15 @@ func mergedUsrSystem() (bool, error) {
 // Parse modinfo output and return the value of module attributes
 // There may be multiple row with same fieldname so []string
 // is used to return all data.
-func getModData(modname string, fieldname string, kernelRelease string) ([]string, error) {
+func getModData(modname string, fieldname string, kernelRelease string, basedir string) ([]string, error) {
+	args := []string{"-k", kernelRelease}
+	if basedir != "" {
+		args = append(args, "-b", basedir)
+	}
+	args = append(args, modname)
+
 	//nolint:noctx,gosec // Synchronous operation; the executable is fixed and no shell is invoked.
-	out, err := exec.Command("modinfo", "-k", kernelRelease, modname).Output()
+	out, err := exec.Command("modinfo", args...).Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to call modinfo for module %q and kernel release %q: %w", modname, kernelRelease, err)
 	}
@@ -68,8 +74,8 @@ func getModData(modname string, fieldname string, kernelRelease string) ([]strin
 }
 
 // Get full path of module.
-func getModPath(modname string, kernelRelease string) (string, error) {
-	path, err := getModData(modname, "filename", kernelRelease)
+func getModPath(modname string, kernelRelease string, basedir string) (string, error) {
+	path, err := getModData(modname, "filename", kernelRelease, basedir)
 	if err != nil {
 		return "", err
 	}
@@ -81,15 +87,15 @@ func getModPath(modname string, kernelRelease string) (string, error) {
 }
 
 // Get all dependent module.
-func getModDepends(modname string, kernelRelease string) ([]string, error) {
-	return getModDependsVisited(modname, kernelRelease, map[string]bool{modname: true})
+func getModDepends(modname string, kernelRelease string, basedir string) ([]string, error) {
+	return getModDependsVisited(modname, kernelRelease, basedir, map[string]bool{modname: true})
 }
 
 // getModDependsVisited is getModDepends, skipping the modules in visited so
 // that each dependency is listed once and a dependency cycle cannot recurse
 // forever.
-func getModDependsVisited(modname string, kernelRelease string, visited map[string]bool) ([]string, error) {
-	deplist, err := getModData(modname, "depends", kernelRelease)
+func getModDependsVisited(modname string, kernelRelease string, basedir string, visited map[string]bool) ([]string, error) {
+	deplist, err := getModData(modname, "depends", kernelRelease, basedir)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +117,7 @@ func getModDependsVisited(modname string, kernelRelease string, visited map[stri
 	// https://github.com/mirror/busybox/blob/1dd2685dcc735496d7adde87ac60b9434ed4a04c/modutils/modprobe.c#L46-L49
 	var sublist []string
 	for _, mod := range modlist {
-		deps, err := getModDependsVisited(mod, kernelRelease, visited)
+		deps, err := getModDependsVisited(mod, kernelRelease, basedir, visited)
 		if err != nil {
 			return nil, fmt.Errorf("get dependencies for module %q: %w", mod, err)
 		}
@@ -130,12 +136,8 @@ var suffixes = map[string]writerhelper.Transformer{
 	".ko.zst": ZstdDecompressor,
 }
 
-func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copiedModules map[string]bool) error {
-	release, err := m.backend.KernelRelease()
-	if err != nil {
-		return fmt.Errorf("failed to get kernel release: %w", err)
-	}
-	modpath, err := getModPath(modname, release)
+func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, release string, basedir string, copiedModules map[string]bool) error {
+	modpath, err := getModPath(modname, release, basedir)
 	if err != nil {
 		return fmt.Errorf("kernel module %q not found for kernel release %q: %w", modname, release, err)
 	}
@@ -153,7 +155,7 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 
 			// The suffix is the complete thing - ".ko.foobar"
 			// Reinstate the required ".ko" part, after trimming.
-			dest := strings.TrimSuffix(modpath, suffix) + ".ko"
+			dest := strings.TrimSuffix(strings.TrimPrefix(modpath, basedir), suffix) + ".ko"
 
 			// Ensure destination has /usr prefix if running
 			// on merged-usr system.
@@ -175,12 +177,12 @@ func (m *Machine) copyModules(w *writerhelper.WriterHelper, modname string, copi
 
 	copiedModules[modname] = true
 
-	deplist, err := getModDepends(modname, release)
+	deplist, err := getModDepends(modname, release, basedir)
 	if err != nil {
 		return fmt.Errorf("failed to get dependencies for kernel module %q: %w", modname, err)
 	}
 	for _, mod := range deplist {
-		if err := m.copyModules(w, mod, copiedModules); err != nil {
+		if err := m.copyModules(w, mod, release, basedir, copiedModules); err != nil {
 			return err
 		}
 	}
@@ -753,33 +755,29 @@ func stripCompressionSuffix(module string) (string, error) {
 	return "", errors.New("module extension/suffix unknown")
 }
 
-func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, modules map[string]bool) error {
+func (m *Machine) generateModulesDep(w *writerhelper.WriterHelper, moddir string, release string, basedir string, modules map[string]bool) error {
 	output := make([]string, len(modules))
-	release, err := m.backend.KernelRelease()
-	if err != nil {
-		return fmt.Errorf("failed to get kernel release: %w", err)
-	}
 	i := 0
 	for mod := range modules {
-		modpath, err := getModPath(mod, release)
+		modpath, err := getModPath(mod, release, basedir)
 		if err != nil {
 			return fmt.Errorf("failed to get path for module %q: %w", mod, err)
 		}
-		modpath, err = stripCompressionSuffix(modpath)
+		modpath, err = stripCompressionSuffix(strings.TrimPrefix(modpath, basedir))
 		if err != nil {
 			return fmt.Errorf("failed to strip compression suffix for module %q: %w", mod, err)
 		}
-		deplist, err := getModDepends(mod, release)
+		deplist, err := getModDepends(mod, release, basedir)
 		if err != nil {
 			return fmt.Errorf("failed to get dependencies for module %q: %w", mod, err)
 		}
 		deps := make([]string, len(deplist))
 		for j, dep := range deplist {
-			deppath, err := getModPath(dep, release)
+			deppath, err := getModPath(dep, release, basedir)
 			if err != nil {
 				return fmt.Errorf("failed to get path for dependency %q of module %q: %w", dep, mod, err)
 			}
-			deppath, err = stripCompressionSuffix(deppath)
+			deppath, err = stripCompressionSuffix(strings.TrimPrefix(deppath, basedir))
 			if err != nil {
 				return fmt.Errorf("failed to strip compression suffix for dependency %q of module %q: %w", dep, mod, err)
 			}
@@ -815,21 +813,55 @@ func (m *Machine) writerKernelModules(w *writerhelper.WriterHelper, moddir strin
 		"modules.symbols",
 	}
 
+	release, err := m.backend.KernelRelease()
+	if err != nil {
+		return fmt.Errorf("failed to get kernel release: %w", err)
+	}
+
+	// The modules directory may be outside of the standard location, e.g.
+	// when set by a backend option. Point modinfo at its base directory and
+	// place the modules at the standard location within the initrd.
+	basedir, found := strings.CutSuffix(moddir, path.Join("/lib/modules", release))
+	if !found {
+		// modinfo requires the modules at <base>/lib/modules/<release>,
+		// so provide that layout through a symlink.
+		tmpdir, err := os.MkdirTemp("", "fakemachine-modules-")
+		if err != nil {
+			return fmt.Errorf("failed to create modules base directory: %w", err)
+		}
+		defer func() { _ = os.RemoveAll(tmpdir) }()
+
+		if err := os.MkdirAll(path.Join(tmpdir, "lib/modules"), 0o750); err != nil {
+			return fmt.Errorf("failed to create modules base directory: %w", err)
+		}
+		if err := os.Symlink(moddir, path.Join(tmpdir, "lib/modules", release)); err != nil {
+			return fmt.Errorf("failed to link modules directory %s: %w", moddir, err)
+		}
+		basedir = tmpdir
+	} else if basedir == "/usr" {
+		basedir = ""
+	}
+
+	destdir := path.Join("/lib/modules", release)
+	if m.mergedUsr {
+		destdir = path.Join("/usr", destdir)
+	}
+
 	for _, v := range modfiles {
-		if err := w.CopyFile(moddir + "/" + v); err != nil {
-			return fmt.Errorf("failed to copy kernel module file %s: %w", moddir+"/"+v, err)
+		if err := w.CopyFileTo(path.Join(moddir, v), path.Join(destdir, v)); err != nil {
+			return fmt.Errorf("failed to copy kernel module file %s: %w", path.Join(moddir, v), err)
 		}
 	}
 
 	copiedModules := make(map[string]bool)
 
 	for _, modname := range modules {
-		if err := m.copyModules(w, modname, copiedModules); err != nil {
+		if err := m.copyModules(w, modname, release, basedir, copiedModules); err != nil {
 			return err
 		}
 	}
 
-	return m.generateModulesDep(w, moddir, copiedModules)
+	return m.generateModulesDep(w, destdir, release, basedir, copiedModules)
 }
 
 func (m *Machine) setupscratch() error {

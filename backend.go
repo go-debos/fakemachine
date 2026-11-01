@@ -102,7 +102,8 @@ type backend interface {
 	// The path to the kernel
 	KernelPath() (kernelPath string, err error)
 
-	// The path to the modules
+	// The path to the modules; "" if InitModules is empty and no modules
+	// are needed
 	ModulePath() (moddir string, err error)
 
 	// A list of udev rules

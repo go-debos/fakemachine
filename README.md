@@ -54,6 +54,38 @@ Running echo test using kvm backend
 test
 ```
 
+## Backend options
+
+Backend specific options can be passed with `--backend-option KEY:VALUE`.
+Unknown options are rejected.
+
+The `qemu` and `kvm` backends support the following options:
+
+- `kernel-path`: path to the kernel image to boot instead of the host kernel.
+- `modules-path`: path to the modules directory of the kernel to boot, e.g.
+  `<root>/lib/modules/<kernel release>` as installed by `make modules_install`.
+  The modules required to boot are copied into the initrd from this directory;
+  it must contain `modules.dep` and its name must match the release of the
+  kernel being booted. If unset and `kernel-path` is set, the directory
+  containing the kernel image is used; if that directory does not contain
+  `modules.dep`, e.g. in a kernel build tree, no modules are added to the
+  initrd and the required drivers must be built into the kernel. This is
+  checked before booting against the `modules.builtin` file found in the
+  directory containing the kernel image or one of its parents, as generated
+  at the root of a kernel build tree.
+
+If both are unset, the kernel and modules of the host are used.
+
+```
+$ fakemachine \
+  --backend-option kernel-path:/path/to/Image \
+  --backend-option modules-path:/path/to/lib/modules/6.12.0 \
+  echo test
+$ fakemachine \
+  --backend-option kernel-path:/path/to/lib/modules/6.12.0/vmlinuz \
+  echo test
+```
+
 ## Docker container
 
 fakemachine is also available as a container image on [ghcr.io](https://github.com/go-debos/debos/pkgs/container/fakemachine).
