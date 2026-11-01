@@ -313,6 +313,14 @@ func TestBackendOptionWhileRunning(t *testing.T) {
 	require.ErrorContains(t, m.SetBackendOption("key", "value"), "machine is running")
 }
 
+func TestInitScriptTemplate(t *testing.T) {
+	m := CreateMachine(t)
+
+	init, err := executeInitScriptTemplate(m, m.backend)
+	require.NoError(t, err)
+	require.Contains(t, string(init), `fail "failed to mount /usr,`)
+}
+
 func TestImageLabelUniqueness(t *testing.T) {
 	m := CreateMachine(t)
 
