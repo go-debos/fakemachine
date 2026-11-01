@@ -289,6 +289,13 @@ func TestDiskSuffix(t *testing.T) {
 	}
 }
 
+func TestBackendOptionUnknown(t *testing.T) {
+	m := CreateMachine(t)
+
+	require.Error(t, m.SetBackendOption("does-not-exist", "value"))
+	require.Equal(t, m.DefaultBackendOptions(), m.BackendOptions())
+}
+
 func TestImageLabelUniqueness(t *testing.T) {
 	m := CreateMachine(t)
 

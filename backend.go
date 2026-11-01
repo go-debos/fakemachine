@@ -92,6 +92,10 @@ type backend interface {
 	// not supported then the error contains a user-facing reason
 	Supported() (bool, error)
 
+	// The backend specific options which can be set mapped to their default
+	// values; a new map is returned on each call
+	Options() map[string]string
+
 	// Get kernel release version
 	KernelRelease() (string, error)
 

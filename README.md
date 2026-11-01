@@ -22,6 +22,7 @@ fakemachine [--help]
 Application Options:
 ```
   -b, --backend=[auto|kvm|qemu] Virtualisation backend to use (default: auto)
+  -o, --backend-option=         Backend specific options (use -o KEY:VALUE syntax)
   -v, --volume=                 volume to mount
   -i, --image=                  image to add
   -e, --environ-var=            Environment variables (use -e VARIABLE:VALUE syntax)

@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -287,6 +289,8 @@ type Machine struct {
 	quiet      bool
 	mergedUsr  bool
 	Environ    []string
+
+	backendOptions map[string]string
 
 	scratchsize int64
 	scratchpath string
@@ -670,6 +674,45 @@ func (m *Machine) SetQuiet(quiet bool) {
 func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchsize = scratchsize
 	m.scratchpath = path
+}
+
+// SetBackendOption sets the backend specific option key to value. Only the
+// options supported by the backend (see DefaultBackendOptions) are accepted;
+// an error is returned for any other key.
+func (m *Machine) SetBackendOption(key, value string) error {
+	defaults := m.backend.Options()
+	if _, ok := defaults[key]; !ok {
+		if len(defaults) == 0 {
+			return fmt.Errorf("unknown backend option %q: %s backend does not support any options",
+				key, m.backend.Name())
+		}
+
+		return fmt.Errorf("unknown backend option %q: %s backend supports %s",
+			key, m.backend.Name(), strings.Join(slices.Sorted(maps.Keys(defaults)), ", "))
+	}
+
+	if m.backendOptions == nil {
+		m.backendOptions = make(map[string]string)
+	}
+	m.backendOptions[key] = value
+
+	return nil
+}
+
+// DefaultBackendOptions returns the backend specific options supported by
+// the backend mapped to their default values.
+func (m *Machine) DefaultBackendOptions() map[string]string {
+	return m.backend.Options()
+}
+
+// BackendOptions returns the backend specific options supported by the
+// backend mapped to their current values: the value set with
+// SetBackendOption, or otherwise the default value.
+func (m *Machine) BackendOptions() map[string]string {
+	options := m.backend.Options()
+	maps.Copy(options, m.backendOptions)
+
+	return options
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
