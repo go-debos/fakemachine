@@ -23,6 +23,7 @@ Application Options:
 ```
   -b, --backend=[auto|kvm|qemu] Virtualisation backend to use (default: auto)
   -o, --backend-option=         Backend specific options (use -o KEY:VALUE syntax)
+      --print-backend-options   Print the default and used values of the backend specific options before running
   -v, --volume=                 volume to mount
   -i, --image=                  image to add
   -e, --environ-var=            Environment variables (use -e VARIABLE:VALUE syntax)
@@ -56,8 +57,11 @@ test
 
 ## Backend options
 
-Backend specific options can be passed with `--backend-option KEY:VALUE`.
-Unknown options are rejected.
+Backend specific options can be passed with `-o, --backend-option KEY:VALUE`.
+Unknown options are rejected. `--print-backend-options` prints the default
+value of every option supported by the backend and the value resolved by the
+backend, e.g. the path of the host kernel when `kernel-path` is unset, before
+starting the backend.
 
 The `qemu` and `kvm` backends support the following options:
 

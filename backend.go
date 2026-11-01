@@ -96,6 +96,10 @@ type backend interface {
 	// values; a new map is returned on each call
 	Options() map[string]string
 
+	// The backend specific options mapped to the values the backend will
+	// use once the defaults and the values set have been resolved
+	ResolvedOptions() (map[string]string, error)
+
 	// Get kernel release version
 	KernelRelease() (string, error)
 

@@ -51,6 +51,23 @@ func (b qemuBackend) Options() map[string]string {
 	}
 }
 
+func (b qemuBackend) ResolvedOptions() (map[string]string, error) {
+	kernelPath, err := b.KernelPath()
+	if err != nil {
+		return nil, err
+	}
+
+	moddir, err := b.ModulePath()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		"kernel-path":  kernelPath,
+		"modules-path": moddir,
+	}, nil
+}
+
 type qemuMachine struct {
 	binary  string
 	console string

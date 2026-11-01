@@ -293,7 +293,8 @@ type Machine struct {
 	mergedUsr  bool
 	Environ    []string
 
-	backendOptions map[string]string
+	backendOptions      map[string]string
+	printBackendOptions bool
 
 	scratchsize int64
 	scratchpath string
@@ -716,6 +717,35 @@ func (m *Machine) BackendOptions() map[string]string {
 	maps.Copy(options, m.backendOptions)
 
 	return options
+}
+
+// SetPrintBackendOptions sets whether to print the default and used value
+// of each backend specific option before starting the backend.
+func (m *Machine) SetPrintBackendOptions(printBackendOptions bool) {
+	m.printBackendOptions = printBackendOptions
+}
+
+// printResolvedBackendOptions prints the default and used value of each
+// backend specific option, the used value being the one resolved by the
+// backend (e.g. the path of the kernel booted when no kernel-path is set).
+func (m *Machine) printResolvedBackendOptions() error {
+	defaults := m.backend.Options()
+	if len(defaults) == 0 {
+		fmt.Printf("%s backend does not support any options\n", m.backend.Name())
+
+		return nil
+	}
+
+	used, err := m.backend.ResolvedOptions()
+	if err != nil {
+		return fmt.Errorf("couldn't resolve backend options: %w", err)
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(defaults)) {
+		fmt.Printf("Backend option %s: default %q, used %q\n", key, defaults[key], used[key])
+	}
+
+	return nil
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
@@ -1219,6 +1249,12 @@ func (m *Machine) startup(command string, extracontent [][2]string) (code int, e
 
 	if !m.quiet {
 		fmt.Printf("Running %s using %s backend\n", command, m.backend.Name())
+	}
+
+	if m.printBackendOptions {
+		if err := m.printResolvedBackendOptions(); err != nil {
+			return -1, err
+		}
 	}
 
 	// Set a default result of failure so that if the backend fails to start
