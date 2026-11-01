@@ -6,8 +6,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strings"
 
 	"al.essio.dev/pkg/shellescape"
@@ -20,17 +22,19 @@ import (
 var Version string
 
 type Options struct {
-	Backend     string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
-	Volumes     []string          `short:"v" long:"volume" description:"volume to mount"`
-	Images      []string          `short:"i" long:"image" description:"image to add"`
-	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
-	Memory      string            `short:"m" long:"memory" description:"Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix)" default:"2Gb"`
-	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine (defaults to number of CPUs on the host)"`
-	SectorSize  int               `short:"S" long:"sectorsize" description:"Override image sector size"`
-	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
-	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
-	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
-	Version     bool              `long:"version" description:"Print fakemachine version"`
+	Backend             string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
+	BackendOptions      map[string]string `short:"o" long:"backend-option" description:"Backend specific options (use -o KEY:VALUE syntax)"`
+	PrintBackendOptions bool              `long:"print-backend-options" description:"Print the default and used values of the backend specific options before running"`
+	Volumes             []string          `short:"v" long:"volume" description:"volume to mount"`
+	Images              []string          `short:"i" long:"image" description:"image to add"`
+	EnvironVars         map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
+	Memory              string            `short:"m" long:"memory" description:"Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix)" default:"2Gb"`
+	CPUs                int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine (defaults to number of CPUs on the host)"`
+	SectorSize          int               `short:"S" long:"sectorsize" description:"Override image sector size"`
+	ScratchSize         string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
+	ShowBoot            bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
+	Quiet               bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
+	Version             bool              `long:"version" description:"Print fakemachine version"`
 }
 
 var (
@@ -191,8 +195,16 @@ func createFakemachine(options Options) (*fakemachine.Machine, error) {
 		return nil, err
 	}
 
+	for _, key := range slices.Sorted(maps.Keys(options.BackendOptions)) {
+		if err := m.SetBackendOption(key, options.BackendOptions[key]); err != nil {
+			//nolint:wrapcheck
+			return nil, err
+		}
+	}
+
 	m.SetShowBoot(options.ShowBoot)
 	m.SetQuiet(options.Quiet)
+	m.SetPrintBackendOptions(options.PrintBackendOptions)
 
 	if err := setupVolumes(m, options); err != nil {
 		return nil, err

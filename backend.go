@@ -92,13 +92,22 @@ type backend interface {
 	// not supported then the error contains a user-facing reason
 	Supported() (bool, error)
 
+	// The backend specific options which can be set mapped to their default
+	// values; a new map is returned on each call
+	Options() map[string]string
+
+	// The backend specific options mapped to the values the backend will
+	// use once the defaults and the values set have been resolved
+	ResolvedOptions() (map[string]string, error)
+
 	// Get kernel release version
 	KernelRelease() (string, error)
 
 	// The path to the kernel
 	KernelPath() (kernelPath string, err error)
 
-	// The path to the modules
+	// The path to the modules; "" if InitModules is empty and no modules
+	// are needed
 	ModulePath() (moddir string, err error)
 
 	// A list of udev rules
