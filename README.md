@@ -66,6 +66,8 @@ starting the backend.
 The `qemu` and `kvm` backends support the following options:
 
 - `kernel-path`: path to the kernel image to boot instead of the host kernel.
+  EFI zboot images (`CONFIG_EFI_ZBOOT`) compressed with gzip, xz or zstd are
+  decompressed before booting, as qemu cannot boot them directly.
 - `modules-path`: path to the modules directory of the kernel to boot, e.g.
   `<root>/lib/modules/<kernel release>` as installed by `make modules_install`.
   The modules required to boot are copied into the initrd from this directory;

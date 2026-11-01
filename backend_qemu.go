@@ -379,6 +379,10 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	kernelPath, err = unpackZboot(kernelPath, path.Join(path.Dir(m.initrdpath), "kernel"))
+	if err != nil {
+		return false, err
+	}
 	memory := fmt.Sprintf("%d", m.memory)
 	numcpus := fmt.Sprintf("%d", m.numcpus)
 	qemuargs := []string{
