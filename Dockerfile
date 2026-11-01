@@ -14,6 +14,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         gcc \
+        libc6-dev \
         golang-go && \
     rm -rf /var/lib/apt/lists/*
 
