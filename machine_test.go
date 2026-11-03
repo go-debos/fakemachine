@@ -16,12 +16,14 @@ import (
 var (
 	backendName string
 	testArg     string
+	networkURL  string
 )
 
 //nolint:gochecknoinits // Injects additional command-line flags to unit tests.
 func init() {
 	flag.StringVar(&backendName, "backend", "auto", "Fakemachine backend to use")
 	flag.StringVar(&testArg, "testarg", "", "Test specific argument")
+	flag.StringVar(&networkURL, "network-url", "", "URL fetched by TestNetworkHTTP")
 }
 
 func CreateMachine(t *testing.T) *Machine {
@@ -53,6 +55,20 @@ func TestNetworkDNS(t *testing.T) {
 	m := CreateMachine(t)
 
 	exitcode, err := m.Run("getent hosts deb.debian.org")
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+// TestNetworkHTTP fetches a URL from inside the machine. CI runs it on
+// IPv4-only, IPv6-only and dual-stack hosts against a local HTTP server.
+func TestNetworkHTTP(t *testing.T) {
+	if networkURL == "" {
+		t.Skip("no -network-url given")
+	}
+
+	m := CreateMachine(t)
+
+	exitcode, err := m.Run("busybox wget -q -O /dev/null " + networkURL)
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
 }
