@@ -3,6 +3,7 @@
 package fakemachine
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -260,6 +261,13 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		"systemd.unit=fakemachine.service",
 	}
 
+	// Keep a copy of everything written to the serial console so a guest
+	// kernel panic can be detected once qemu exits. With panic=-1 and
+	// -no-reboot qemu exits successfully on a panic, so the exit status
+	// alone can't tell it apart from a clean shutdown.
+	consoleLog := path.Join(path.Dir(m.initrdpath), "console.log")
+	consoleLogOpt := ",logfile=" + strings.ReplaceAll(consoleLog, ",", ",,")
+
 	if m.showBoot {
 		// Create a character device representing our stdio
 		// file descriptors, and connect the emulated serial
@@ -267,7 +275,7 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		// Linux and systemd, and is also connected to the
 		// fakemachine script) to that device
 		qemuargs = append(qemuargs,
-			"-chardev", "stdio,id=for-ttyS0,signal=off",
+			"-chardev", "stdio,id=for-ttyS0,signal=off"+consoleLogOpt,
 			"-serial", "chardev:for-ttyS0")
 		kernelargs = append(kernelargs, "loglevel=7")
 	} else {
@@ -275,9 +283,9 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 			// Create the bus for virtio consoles
 			"-device", "virtio-serial",
 			// Create /dev/ttyS0 to be the VM console, but
-			// ignore anything written to it, so that it
+			// only log anything written to it, so that it
 			// doesn't corrupt our terminal
-			"-chardev", "null,id=for-ttyS0",
+			"-chardev", "null,id=for-ttyS0"+consoleLogOpt,
 			"-serial", "chardev:for-ttyS0",
 			// Connect the fakemachine script to our stdio
 			// file descriptors
@@ -321,7 +329,52 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		return false, fmt.Errorf("error waiting for qemu process: %w", err)
 	}
 
+	msg, err := guestKernelPanic(consoleLog)
+	if err != nil {
+		return false, fmt.Errorf("error reading guest console log: %w", err)
+	}
+	if msg != "" {
+		return false, fmt.Errorf("guest kernel panic: %s", msg)
+	}
+
 	return pstate.Success(), nil
+}
+
+// kernelPanicMarker is the prefix the kernel prints when it panics.
+const kernelPanicMarker = "Kernel panic - not syncing"
+
+// guestKernelPanic scans a guest console log for a kernel panic and returns
+// the panic message, or an empty string if the guest didn't panic. A missing
+// log is not an error, as it just means the guest never wrote to the console.
+func guestKernelPanic(consoleLog string) (string, error) {
+	//nolint:gosec // consoleLog is created by fakemachine in its own tmpdir.
+	f, err := os.Open(consoleLog)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to open console log: %w", err)
+	}
+
+	// The log is only read, so a close error can't lose any data.
+	defer func() { _ = f.Close() }()
+
+	scanner := bufio.NewScanner(f)
+	// Console lines can be long; don't fail on them.
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r")
+		if i := strings.Index(line, kernelPanicMarker); i >= 0 {
+			// Drop any printk timestamp before the marker.
+			return line[i:], nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to scan console log: %w", err)
+	}
+
+	return "", nil
 }
 
 type kvmBackend struct {

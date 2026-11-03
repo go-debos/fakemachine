@@ -191,6 +191,84 @@ fi
 	require.Equal(t, 0, exitcode)
 }
 
+// captureStdout redirects os.Stdout while fn runs and returns everything
+// written to it. The backends hand os.Stdout to the machine process, so this
+// also captures the output of the command running in the machine.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+
+	output := make(chan string)
+	go func() {
+		data, _ := io.ReadAll(r)
+		output <- string(data)
+	}()
+
+	stdout := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = stdout }()
+
+	fn()
+
+	require.NoError(t, w.Close())
+	data := <-output
+	require.NoError(t, r.Close())
+
+	// Echo the output so it still shows up in the test log.
+	t.Log(data)
+
+	return data
+}
+
+const oomMessage = "fakemachine: the out-of-memory killer killed"
+
+// oomSink keeps the memory allocated by TestOutOfMemory reachable.
+var oomSink [][]byte
+
+func TestOutOfMemory(t *testing.T) {
+	if InMachine() {
+		// Allocate memory until the out-of-memory killer kills us. This is
+		// done in Go rather than with a command from the host (e.g. tail on
+		// /dev/zero) as their behaviour differs between implementations.
+		for {
+			chunk := make([]byte, 1<<20)
+			// Touch every page so the memory is actually committed.
+			for i := 0; i < len(chunk); i += os.Getpagesize() {
+				chunk[i] = 1
+			}
+
+			oomSink = append(oomSink, chunk)
+		}
+	}
+
+	m := CreateMachine(t)
+	m.SetMemory(512)
+
+	var exitcode int
+	var err error
+	output := captureStdout(t, func() {
+		exitcode, err = m.RunInMachineWithArgs([]string{"-test.run", "^TestOutOfMemory$"})
+	})
+	require.NoError(t, err)
+	require.Equal(t, 137, exitcode)
+	require.Contains(t, output, oomMessage)
+}
+
+func TestNoOutOfMemoryReport(t *testing.T) {
+	m := CreateMachine(t)
+
+	var exitcode int
+	var err error
+	output := captureStdout(t, func() {
+		exitcode, err = m.Run("true")
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+	require.NotContains(t, output, oomMessage)
+}
+
 func TestSpawnMachine(t *testing.T) {
 	if InMachine() {
 		t.Log("Running in the machine")
