@@ -289,6 +289,16 @@ func TestDiskSuffix(t *testing.T) {
 	}
 }
 
+func TestRunning(t *testing.T) {
+	m := CreateMachine(t)
+	require.False(t, m.Running())
+
+	exitcode, err := m.Run("true")
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+	require.False(t, m.Running())
+}
+
 func TestImageLabelUniqueness(t *testing.T) {
 	m := CreateMachine(t)
 

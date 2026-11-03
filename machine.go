@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"text/template"
 
 	"al.essio.dev/pkg/shellescape"
@@ -286,6 +287,7 @@ type Machine struct {
 	showBoot   bool
 	quiet      bool
 	mergedUsr  bool
+	running    atomic.Bool
 	Environ    []string
 
 	scratchsize int64
@@ -509,7 +511,7 @@ func tmplMountVolume(b backend, m mountPoint) string {
 
 // helper function to return the static volumes from a machine, since the mounts variable is unexported
 // include the extra static mounts from the backend.
-func tmplStaticVolumes(m Machine) []mountPoint {
+func tmplStaticVolumes(m *Machine) []mountPoint {
 	mounts := []mountPoint{}
 	for _, mount := range append(m.mounts, m.backend.InitStaticVolumes()...) {
 		if mount.static {
@@ -670,6 +672,13 @@ func (m *Machine) SetQuiet(quiet bool) {
 func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchsize = scratchsize
 	m.scratchpath = path
+}
+
+// Running returns whether the machine is running, i.e. whether Run,
+// RunInMachine or RunInMachineWithArgs has been called and has not yet
+// returned. It is safe to call from another goroutine.
+func (m *Machine) Running() bool {
+	return m.running.Load()
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
@@ -1087,6 +1096,9 @@ func (m *Machine) buildInitrd(command string, extracontent [][2]string) (err err
 //
 //nolint:nonamedreturns // Named err allows deferred cleanup errors to amend the returned error.
 func (m *Machine) startup(command string, extracontent [][2]string) (code int, err error) {
+	m.running.Store(true)
+	defer m.running.Store(false)
+
 	defer func() {
 		if cleanupErr := m.cleanup(); cleanupErr != nil {
 			err = errors.Join(err, fmt.Errorf("cleanup failed: %w", cleanupErr))
