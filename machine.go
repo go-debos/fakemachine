@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -289,6 +291,8 @@ type Machine struct {
 	mergedUsr  bool
 	running    atomic.Bool
 	Environ    []string
+
+	backendOptions map[string]string
 
 	scratchsize int64
 	scratchpath string
@@ -679,6 +683,60 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 // returned. It is safe to call from another goroutine.
 func (m *Machine) Running() bool {
 	return m.running.Load()
+}
+
+// SetBackendOption sets the backend specific option key to value. Only the
+// options supported by the backend (see DefaultBackendOptions) are accepted;
+// an error is returned for any other key, or while the machine is running.
+func (m *Machine) SetBackendOption(key, value string) error {
+	if m.Running() {
+		return fmt.Errorf("couldn't set backend option %q: the machine is running", key)
+	}
+
+	defaults := m.backend.DefaultOptions()
+	if _, ok := defaults[key]; !ok {
+		if len(defaults) == 0 {
+			return fmt.Errorf("unknown backend option %q: %s backend does not support any options",
+				key, m.backend.Name())
+		}
+
+		return fmt.Errorf("unknown backend option %q: %s backend supports %s",
+			key, m.backend.Name(), strings.Join(slices.Sorted(maps.Keys(defaults)), ", "))
+	}
+
+	if m.backendOptions == nil {
+		m.backendOptions = make(map[string]string)
+	}
+	m.backendOptions[key] = value
+
+	return nil
+}
+
+// DefaultBackendOptions returns the backend specific options supported by
+// the backend mapped to their default values.
+func (m *Machine) DefaultBackendOptions() map[string]string {
+	return m.backend.DefaultOptions()
+}
+
+// configuredBackendOptions returns the backend specific options supported
+// by the backend mapped to their current values: the value set with
+// SetBackendOption, or otherwise the default value.
+func (m *Machine) configuredBackendOptions() map[string]string {
+	options := m.backend.DefaultOptions()
+	maps.Copy(options, m.backendOptions)
+
+	return options
+}
+
+// BackendOptions returns the backend specific options supported by the
+// backend mapped to the values the backend uses.
+func (m *Machine) BackendOptions() (map[string]string, error) {
+	options, err := m.backend.Options()
+	if err != nil {
+		return nil, fmt.Errorf("couldn't get backend options: %w", err)
+	}
+
+	return options, nil
 }
 
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {

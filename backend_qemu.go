@@ -35,6 +35,14 @@ func (b qemuBackend) Supported() (bool, error) {
 	return true, nil
 }
 
+func (b qemuBackend) DefaultOptions() map[string]string {
+	return map[string]string{}
+}
+
+func (b qemuBackend) Options() (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
 type qemuMachine struct {
 	binary  string
 	console string

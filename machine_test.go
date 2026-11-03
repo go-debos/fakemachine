@@ -299,6 +299,20 @@ func TestRunning(t *testing.T) {
 	require.False(t, m.Running())
 }
 
+func TestBackendOptionUnknown(t *testing.T) {
+	m := CreateMachine(t)
+
+	require.Error(t, m.SetBackendOption("does-not-exist", "value"))
+	require.Equal(t, m.DefaultBackendOptions(), m.configuredBackendOptions())
+}
+
+func TestBackendOptionWhileRunning(t *testing.T) {
+	m := CreateMachine(t)
+	m.running.Store(true)
+
+	require.ErrorContains(t, m.SetBackendOption("key", "value"), "machine is running")
+}
+
 func TestImageLabelUniqueness(t *testing.T) {
 	m := CreateMachine(t)
 
