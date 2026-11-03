@@ -2,12 +2,15 @@ package fakemachine
 
 import (
 	"bufio"
+	"encoding/binary"
 	"flag"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -168,6 +171,66 @@ func TestScratchDisk(t *testing.T) {
 	m.SetScratch(1024*1024*1024, "")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+// maxDirOffset returns the largest directory offset reported by getdents for
+// the entries of the given directory.
+func maxDirOffset(t *testing.T, dir string) uint64 {
+	t.Helper()
+	//nolint:gosec // dir refers to a test-controlled temporary directory.
+	f, err := os.Open(dir)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, f.Close())
+	}()
+
+	var maxOff uint64
+	buf := make([]byte, 4096)
+	for {
+		n, err := syscall.ReadDirent(int(f.Fd()), buf)
+		require.NoError(t, err)
+		if n == 0 {
+			break
+		}
+
+		// struct linux_dirent64: d_ino (8), d_off (8), d_reclen (2), ...
+		for pos := 0; pos < n; {
+			off := binary.NativeEndian.Uint64(buf[pos+8:])
+			maxOff = max(maxOff, off)
+			pos += int(binary.NativeEndian.Uint16(buf[pos+16:]))
+		}
+	}
+
+	return maxOff
+}
+
+func TestScratch32BitCompatible(t *testing.T) {
+	if InMachine() {
+		AssertMount(t, "/scratch", "ext4")
+
+		// Use enough entries for the directory to span multiple blocks,
+		// which is when ext4 would index it and report hashes as offsets.
+		t.Setenv("TMPDIR", "/scratch")
+		dir := t.TempDir()
+		for i := range 1000 {
+			//nolint:gosec // path refers to a test-controlled temporary file.
+			f, err := os.Create(filepath.Join(dir, "entry-"+strconv.Itoa(i)))
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+		}
+
+		require.LessOrEqual(t, maxDirOffset(t, dir), uint64(math.MaxInt32))
+
+		return
+	}
+
+	m := CreateMachine(t)
+	m.SetScratch(1024*1024*1024, "")
+	m.SetScratchFilesystem32BitCompatible(true)
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratch32BitCompatible"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
 }

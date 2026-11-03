@@ -21,20 +21,21 @@ fakemachine [--help]
 
 Application Options:
 ```
-  -b, --backend=[auto|kvm|qemu] Virtualisation backend to use (default: auto)
-  -v, --volume=                 volume to mount
-  -i, --image=                  image to add
-  -e, --environ-var=            Environment variables (use -e VARIABLE:VALUE syntax)
-  -m, --memory=                 Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix) (default: 2Gb)
-  -c, --cpus=                   Number of CPUs for the fakemachine (defaults to number of CPUs on the host)
-  -S, --sectorsize=             Override image sector size
-  -s, --scratchsize=            On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used
-      --show-boot               Show boot/console messages from the fakemachine
-  -q, --quiet                   Don't show logs from fakemachine or the backend; only print the command's stdout/stderr
-      --version                 Print fakemachine version
+  -b, --backend=[auto|kvm|qemu]   Virtualisation backend to use (default: auto)
+  -v, --volume=                   volume to mount
+  -i, --image=                    image to add
+  -e, --environ-var=              Environment variables (use -e VARIABLE:VALUE syntax)
+  -m, --memory=                   Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix) (default: 2Gb)
+  -c, --cpus=                     Number of CPUs for the fakemachine (defaults to number of CPUs on the host)
+  -S, --sectorsize=               Override image sector size
+  -s, --scratchsize=              On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used
+      --scratch-32bit-compatible  Create the on-disk scratch filesystem so 32-bit programs can list large directories (requires --scratchsize)
+      --show-boot                 Show boot/console messages from the fakemachine
+  -q, --quiet                     Don't show logs from fakemachine or the backend; only print the command's stdout/stderr
+      --version                   Print fakemachine version
 
 Help Options:
-  -h, --help                    Show this help message
+  -h, --help                      Show this help message
 ```
 
 ## Installation
