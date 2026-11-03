@@ -31,6 +31,7 @@ Application Options:
   -s, --scratchsize=            On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used
       --show-boot               Show boot/console messages from the fakemachine
   -q, --quiet                   Don't show logs from fakemachine or the backend; only print the command's stdout/stderr
+      --debug                   Print the backend command line and keep generated runtime files (e.g. the initrd) for debugging
       --version                 Print fakemachine version
 
 Help Options:
