@@ -440,8 +440,26 @@ if [ $? != 0 ]; then
 fi
 
 %[2]s
+fakemachine_oom_kills() {
+  while read -r key value; do
+    if [ "$key" = oom_kill ]; then
+      echo "$value"
+      return
+    fi
+  done < /proc/vmstat
+  echo 0
+}
+FAKEMACHINE_OOM_KILLS=$(fakemachine_oom_kills)
+
 %[1]s
-echo $? > /run/fakemachine/result
+FAKEMACHINE_RESULT=$?
+
+FAKEMACHINE_OOM_KILLS=$(( $(fakemachine_oom_kills) - FAKEMACHINE_OOM_KILLS ))
+if [ "$FAKEMACHINE_OOM_KILLS" -gt 0 ]; then
+  echo "fakemachine: the out-of-memory killer killed $FAKEMACHINE_OOM_KILLS process(es)" >&2
+  echo "fakemachine: try increasing the machine memory, or use a disk-backed scratch if /scratch is memory-backed" >&2
+fi
+echo $FAKEMACHINE_RESULT > /run/fakemachine/result
 `
 
 // resolvConfWrapper is injected into the command wrapper (as '%[2]s') when
@@ -487,6 +505,7 @@ StandardInput=tty-force
 StandardOutput=inherit
 StandardError=inherit
 KillMode=process
+OOMPolicy=continue
 IgnoreSIGPIPE=no
 SendSIGHUP=yes
 LimitNOFILE=4096
