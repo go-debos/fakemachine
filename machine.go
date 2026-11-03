@@ -390,6 +390,19 @@ func Supported() bool {
 //nolint:dupword // "proc" is intentionally repeated as the filesystem type and source.
 const initScript = `#!/bin/busybox sh
 
+# On older kernels the initramfs is the rootfs mount at the top of the mount
+# tree, which pivot_root(2) refuses to move away from; breaking container
+# tools such as bubblewrap and podman in the machine. Move a bind mount of it
+# over / and re-run init from there so the root mount has a parent.
+if [ "$1" != "--pivoted" ]; then
+  busybox mkdir /newroot
+  busybox mount --bind / /newroot
+  cd /newroot
+  busybox mount --move . /
+  exec busybox chroot . /init --pivoted
+fi
+busybox rmdir /newroot
+
 busybox mount -t proc proc /proc
 busybox mount -t sysfs none /sys
 
