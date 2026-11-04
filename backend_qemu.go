@@ -240,7 +240,11 @@ func (b qemuBackend) StartQemu(kvm bool) (bool, error) {
 		"-kernel", kernelPath,
 		"-initrd", m.initrdpath,
 		"-display", "none",
-		"-nic", "user,model=virtio-net-pci",
+		"-netdev", "user,id=net0",
+		/* fakemachine boots the kernel directly, so the NIC's iPXE
+		 * option ROM is never used. Don't load it, so qemu doesn't
+		 * fail when the ROM isn't installed. */
+		"-device", "virtio-net-pci,netdev=net0,romfile=",
 		"-no-reboot",
 	}
 
