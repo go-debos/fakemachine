@@ -289,6 +289,38 @@ func TestDiskSuffix(t *testing.T) {
 	}
 }
 
+func TestRunning(t *testing.T) {
+	m := CreateMachine(t)
+	require.False(t, m.Running())
+
+	exitcode, err := m.Run("true")
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+	require.False(t, m.Running())
+}
+
+func TestBackendOptionUnknown(t *testing.T) {
+	m := CreateMachine(t)
+
+	require.Error(t, m.SetBackendOption("does-not-exist", "value"))
+	require.Equal(t, m.DefaultBackendOptions(), m.configuredBackendOptions())
+}
+
+func TestBackendOptionWhileRunning(t *testing.T) {
+	m := CreateMachine(t)
+	m.running.Store(true)
+
+	require.ErrorContains(t, m.SetBackendOption("key", "value"), "machine is running")
+}
+
+func TestInitScriptTemplate(t *testing.T) {
+	m := CreateMachine(t)
+
+	init, err := executeInitScriptTemplate(m, m.backend)
+	require.NoError(t, err)
+	require.Contains(t, string(init), `fail "failed to mount /usr,`)
+}
+
 func TestImageLabelUniqueness(t *testing.T) {
 	m := CreateMachine(t)
 
