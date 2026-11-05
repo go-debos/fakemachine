@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,40 @@ func CreateMachine(t *testing.T) *Machine {
 	machine.SetNumCPUs(2)
 
 	return machine
+}
+
+// Skip the test when running with the named backend, e.g. for features which
+// need a VM such as block device images.
+func skipIfBackend(t *testing.T, m *Machine, name, why string) {
+	t.Helper()
+	if m.backend.Name() == name {
+		t.Skipf("not supported by the %s backend: %s", name, why)
+	}
+}
+
+// Skip the test when running on the host kernel (unshare, incus), e.g. for
+// features which need a VM such as block device images.
+func skipIfHostKernel(t *testing.T, m *Machine, why string) {
+	t.Helper()
+	if _, ok := m.backend.(hostKernelBackend); ok {
+		t.Skipf("not supported by the %s backend: %s", m.backend.Name(), why)
+	}
+}
+
+// Skip the test unless running on the host kernel.
+func skipUnlessHostKernel(t *testing.T, m *Machine) {
+	t.Helper()
+	if _, ok := m.backend.(hostKernelBackend); !ok {
+		t.Skipf("only applies to backends running on the host kernel")
+	}
+}
+
+// Skip the test unless running with the named backend.
+func skipUnlessBackend(t *testing.T, m *Machine, name string) {
+	t.Helper()
+	if m.backend.Name() != name {
+		t.Skipf("only applies to the %s backend", name)
+	}
 }
 
 func TestSuccessfulCommand(t *testing.T) {
@@ -59,6 +94,7 @@ func TestNetworkDNS(t *testing.T) {
 
 func TestImage(t *testing.T) {
 	m := CreateMachine(t)
+	skipIfHostKernel(t, m, "images need block devices")
 
 	_, err := m.CreateImage("test.img", 1024*1024)
 	require.NoError(t, err)
@@ -88,6 +124,7 @@ func AssertSectorSize(t *testing.T, sectorsize int) {
 	}
 
 	m := CreateMachine(t)
+	skipIfHostKernel(t, m, "images need block devices")
 	m.SetSectorSize(sectorsize)
 	_, err := m.CreateImage("test-"+strconv.Itoa(sectorsize)+"-sector-size.img", 1024*1024)
 	require.NoError(t, err)
@@ -165,6 +202,7 @@ func TestScratchDisk(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
+	skipIfHostKernel(t, m, "on-disk scratch is a directory, not an ext4 image")
 	m.SetScratch(1024*1024*1024, "")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
@@ -174,6 +212,7 @@ func TestScratchDisk(t *testing.T) {
 
 func TestMemory(t *testing.T) {
 	m := CreateMachine(t)
+	skipIfBackend(t, m, "unshare", "memory is not limited")
 
 	m.SetMemory(1024)
 	// Nasty hack, this gets a chunk of shell script inserted in the wrapper script
@@ -181,8 +220,9 @@ func TestMemory(t *testing.T) {
 	// testing
 	command := `
 MEM=$(grep MemTotal /proc/meminfo  | awk ' { print $2 } ' )
-# MemTotal is usable ram, not physical ram so accept a range
-if [ ${MEM} -lt 900000 -o ${MEM} -gt 1024000 ] ; then
+# MemTotal is usable ram, not physical ram so accept a range; incus (lxcfs)
+# reports exactly the limit
+if [ ${MEM} -lt 900000 -o ${MEM} -gt 1048576 ] ; then
   exit 1
 fi
 `
@@ -226,6 +266,7 @@ func TestImageLabel(t *testing.T) {
 	}
 
 	m := CreateMachine(t)
+	skipIfHostKernel(t, m, "images need block devices")
 	autolabel, err := m.CreateImage("test-autolabel.img", 1024*1024)
 	require.NoError(t, err)
 
@@ -335,6 +376,126 @@ func TestCommandEscaping(t *testing.T) {
 		"-test.v", "-test.run",
 		"TestCommandEscaping", "-testarg", "$s'n\\akes",
 	})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+func TestScratchDir(t *testing.T) {
+	if InMachine() {
+		//nolint:gosec // The test intentionally uses normal umask-controlled file permissions.
+		require.NoError(t, os.WriteFile("/scratch/test", []byte("scratch"), 0o644))
+
+		return
+	}
+
+	m := CreateMachine(t)
+	skipUnlessHostKernel(t, m)
+
+	scratchpath := t.TempDir()
+	m.SetScratch(1024*1024*1024, scratchpath)
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDir"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+
+	// The scratch directory must be cleaned up after the run
+	entries, err := os.ReadDir(scratchpath)
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}
+
+func TestVolumeWrite(t *testing.T) {
+	m := CreateMachine(t)
+
+	dir := t.TempDir()
+	m.AddVolume(dir)
+
+	exitcode, err := m.Run("echo hello > " + filepath.Join(dir, "out"))
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+
+	//nolint:gosec // path refers to a test-controlled temporary file.
+	data, err := os.ReadFile(filepath.Join(dir, "out"))
+	require.NoError(t, err)
+	require.Equal(t, "hello\n", string(data))
+}
+
+func TestUnshareIsolation(t *testing.T) {
+	if InMachine() {
+		require.Equal(t, 0, os.Getuid())
+
+		hostname, err := os.Hostname()
+		require.NoError(t, err)
+		require.Equal(t, "fakemachine", hostname)
+
+		// PID 1 is the setup script in the new PID namespace, not the host init
+		cmdline, err := os.ReadFile("/proc/1/cmdline")
+		require.NoError(t, err)
+		require.Contains(t, string(cmdline), "setup.sh")
+
+		AssertMount(t, "/scratch", "tmpfs")
+
+		return
+	}
+
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "unshare")
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestUnshareIsolation"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+func TestHostKernelRejectsImages(t *testing.T) {
+	m := CreateMachine(t)
+	skipUnlessHostKernel(t, m)
+
+	_, err := m.CreateImage(filepath.Join(t.TempDir(), "test.img"), 1024*1024)
+	require.NoError(t, err)
+
+	exitcode, err := m.Run("true")
+	require.Error(t, err)
+	require.Equal(t, -1, exitcode)
+}
+
+func TestIncusIsolation(t *testing.T) {
+	if InMachine() {
+		require.Equal(t, 0, os.Getuid())
+
+		hostname, err := os.Hostname()
+		require.NoError(t, err)
+		require.Equal(t, "fakemachine", hostname)
+
+		// PID 1 is the init script run by LXC
+		cmdline, err := os.ReadFile("/proc/1/cmdline")
+		require.NoError(t, err)
+		require.Contains(t, string(cmdline), "init.sh")
+
+		// The pushed root is owned by root in the container
+		var st syscall.Stat_t
+		require.NoError(t, syscall.Lstat("/etc/passwd", &st))
+		require.Equal(t, uint32(0), st.Uid)
+
+		AssertMount(t, "/scratch", "tmpfs")
+
+		return
+	}
+
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "incus")
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestIncusIsolation"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+func TestIncusLimits(t *testing.T) {
+	m := CreateMachine(t)
+	skipUnlessBackend(t, m, "incus")
+
+	m.SetMemory(512)
+	m.SetNumCPUs(1)
+	exitcode, err := m.Run(`[ "$(cat /sys/fs/cgroup/memory.max)" = 536870912 ] && [ "$(nproc)" = 1 ]`)
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
 }

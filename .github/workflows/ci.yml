@@ -56,6 +56,9 @@ jobs:
         backend:
           - qemu
           - kvm
+          # unprivileged user namespaces are blocked by the default container
+          # seccomp/AppArmor profiles and masked /proc paths
+          - unshare
     name: Test ${{matrix.os}} with ${{matrix.backend}} backend
     runs-on: 'ubuntu-latest'
     defaults:
@@ -68,6 +71,7 @@ jobs:
         --cap-add=SYS_PTRACE
         --tmpfs /scratch:exec
         ${{ matrix.backend == 'kvm' && '--device /dev/kvm' || '' }}
+        ${{ matrix.backend == 'unshare' && '--privileged' || '' }}
     env:
       TMP: /scratch
     steps:
@@ -89,8 +93,43 @@ jobs:
     - name: Print fakemachine version
       run: ./fakemachine --version
 
+    # pivot_root and newuidmap/newgidmap are in separate packages on Debian and
+    # Ubuntu; Arch and Fedora ship them in util-linux and shadow(-utils)
+    - name: Install unshare backend dependencies
+      if: matrix.backend == 'unshare' && (startsWith(matrix.os, 'debian') || startsWith(matrix.os, 'ubuntu'))
+      run: apt-get update && apt-get install -y --no-install-recommends util-linux-extra uidmap
+
+    # The Arch and Fedora images lack hostname(1), which sets the machine's
+    # hostname when not running as root
+    - name: Install hostname (Arch)
+      if: matrix.backend == 'unshare' && matrix.os == 'arch'
+      run: pacman -Sy --noconfirm inetutils
+
+    - name: Install hostname (Fedora)
+      if: matrix.backend == 'unshare' && startsWith(matrix.os, 'fedora')
+      run: dnf install -y hostname
+
     - name: Run unit tests (${{matrix.backend}} backend)
-      run: go test -v ./... --backend=${{matrix.backend}} | tee test.out
+      run: go test -v -timeout 20m ./... --backend=${{matrix.backend}} | tee test.out
+
+    # The job runs as root, where the unshare backend maps every id through;
+    # run again as a user so the subordinate id path is tested too. The
+    # runner's AppArmor policy denies unprivileged user namespaces any
+    # capability; the container is privileged so it can lift that
+    - name: Run unit tests (unshare backend, non-root)
+      if: matrix.backend == 'unshare'
+      run: |
+        if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+          echo 0 > /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+        fi
+        useradd -m fmtest
+        grep -q '^fmtest:' /etc/subuid || echo 'fmtest:100000:65536' >> /etc/subuid
+        grep -q '^fmtest:' /etc/subgid || echo 'fmtest:100000:65536' >> /etc/subgid
+        chmod 1777 /scratch
+        chown -R fmtest "$GITHUB_WORKSPACE"
+        runuser -u fmtest -- env PATH="$PATH" HOME=/home/fmtest TMP=/scratch \
+          GOCACHE=/scratch/go-cache GOPATH=/scratch/go \
+          go test -v ./... --backend=unshare
 
   test-name-resolution-without-resolved:
     # fakemachine should work on hosts without systemd-resolved, falling back to
@@ -126,6 +165,38 @@ jobs:
     - name: Run DNS resolution test (qemu backend)
       run: go test -v -run TestNetworkDNS ./... --backend=qemu | tee test.out
 
+  # incusd can't run inside the test containers, so test on the runner itself
+  test-incus:
+    name: Test ubuntu-latest with incus backend
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    # Map the runner user to root in the machine, so the raw.idmap path is
+    # tested rather than shifted volumes. dnsmasq is only a recommend of
+    # incus, but creating the default bridge needs it
+    - name: Install and set up incus
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends incus dnsmasq-base
+        echo "root:$(id -u):1" | sudo tee -a /etc/subuid
+        echo "root:$(id -g):1" | sudo tee -a /etc/subgid
+        sudo systemctl restart incus
+        sudo incus admin init --minimal
+        sudo usermod -aG incus-admin "$USER"
+        # Docker's FORWARD policy drops the traffic of the incus bridge
+        sudo iptables -P FORWARD ACCEPT
+
+    - name: Run unit tests (incus backend)
+      # sudo picks up the new incus-admin group as a supplementary group,
+      # whereas sg would make it the primary group, which isn't in subgid
+      run: sudo -E -u "$USER" env "PATH=$PATH" go test -v ./... --backend=incus
+
   build-container:
     name: Build Docker container
     runs-on: ubuntu-latest
@@ -135,6 +206,7 @@ jobs:
     needs:
       - golangci
       - test
+      - test-incus
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
@@ -193,6 +265,7 @@ jobs:
       - golangci
       - man-page
       - test
+      - test-incus
       - build-container
     runs-on: ubuntu-latest
     steps:
