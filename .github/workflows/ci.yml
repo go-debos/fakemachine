@@ -62,7 +62,7 @@ jobs:
       run:
         shell: bash
     container:
-      image: ghcr.io/go-debos/test-containers/${{matrix.os}}:main
+      image: ghcr.io/go-debos/test-containers/${{matrix.os}}:wip-obbardc-virtiofsd
       options: >-
         --security-opt label=disable
         --cap-add=SYS_PTRACE
@@ -102,7 +102,7 @@ jobs:
       run:
         shell: bash
     container:
-      image: ghcr.io/go-debos/test-containers/debian-trixie:main
+      image: ghcr.io/go-debos/test-containers/debian-trixie:wip-obbardc-virtiofsd
       options: >-
         --security-opt label=disable
         --cap-add=SYS_PTRACE

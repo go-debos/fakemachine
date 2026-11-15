@@ -39,6 +39,9 @@ Help Options:
 
 ## Installation
 
+The qemu and kvm backends require qemu and
+[virtiofsd](https://gitlab.com/virtio-fs/virtiofsd) to be installed on the host.
+
 ```
 $ export GOPATH=~/go
 $ export PATH=$PATH:~/go/bin

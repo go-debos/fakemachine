@@ -269,6 +269,43 @@ func TestVolumes(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestVolumeFileOperations(t *testing.T) {
+	if InMachine() {
+		dir := "/test-volume"
+
+		/* ftruncate on an unlinked file, as done by tempfile users such
+		 * as bmaptool (#179) */
+		f, err := os.CreateTemp(dir, "unlinked")
+		require.NoError(t, err)
+		require.NoError(t, os.Remove(f.Name()))
+		require.NoError(t, f.Truncate(1024))
+		require.NoError(t, f.Close())
+
+		/* Large writes used to fail with EAGAIN (#210) */
+		f, err = os.Create(filepath.Join(dir, "large"))
+		require.NoError(t, err)
+		buf := make([]byte, 100*1024*1024)
+		for range 10 {
+			_, err = f.Write(buf)
+			require.NoError(t, err)
+		}
+		require.NoError(t, f.Close())
+
+		/* Changing ownership has to work even if the host side can't
+		 * actually do so */
+		require.NoError(t, os.Chown(filepath.Join(dir, "large"), 1234, 1234))
+
+		return
+	}
+
+	m := CreateMachine(t)
+	m.AddVolumeAt(t.TempDir(), "/test-volume")
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestVolumeFileOperations"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
 func TestDiskSuffix(t *testing.T) {
 	cases := []struct {
 		i    int
