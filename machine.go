@@ -288,11 +288,12 @@ type Machine struct {
 	mergedUsr  bool
 	Environ    []string
 
-	scratchsize int64
-	scratchpath string
-	scratchfile string
-	scratchdev  string
-	initrdpath  string
+	scratchsize  int64
+	scratchpath  string
+	scratch32bit bool
+	scratchfile  string
+	scratchdev   string
+	initrdpath   string
 }
 
 // NewMachine is NewMachineWithBackend with the "auto" backend, which picks
@@ -672,6 +673,21 @@ func (m *Machine) SetScratch(scratchsize int64, path string) {
 	m.scratchpath = path
 }
 
+// SetScratchFilesystem32BitCompatible sets whether the on-disk scratch
+// filesystem should be created so that 32-bit userspace can list large
+// directories. It has no effect when /scratch is backed by memory.
+//
+// By default ext4 indexes large directories and reports a hash of each entry
+// as its directory offset. A 64-bit process, such as qemu-user running a
+// foreign 32-bit binary, is given 64-bit hashes, which 32-bit userspace
+// without large file support cannot represent: readdir() fails with
+// EOVERFLOW. Enabling this disables directory indexing on the scratch
+// filesystem so offsets always fit in 32 bits, at the cost of slower lookups
+// in large directories.
+func (m *Machine) SetScratchFilesystem32BitCompatible(compatible bool) {
+	m.scratch32bit = compatible
+}
+
 func (m *Machine) generateFstab(w *writerhelper.WriterHelper, backend backend) error {
 	fstab := []string{"# Generated fstab file by fakemachine"}
 
@@ -816,8 +832,14 @@ func (m *Machine) setupscratch() error {
 		return err
 	}
 
-	//nolint:noctx,gosec // Synchronous operation; the executable is fixed and scratchfile is created internally.
-	mkfs := exec.Command("mkfs.ext4", "-q", m.scratchfile)
+	mkfsArgs := []string{"-q"}
+	if m.scratch32bit {
+		mkfsArgs = append(mkfsArgs, "-O", "^dir_index")
+	}
+	mkfsArgs = append(mkfsArgs, m.scratchfile)
+
+	//nolint:noctx // Synchronous operation.
+	mkfs := exec.Command("mkfs.ext4", mkfsArgs...)
 	err = mkfs.Run()
 	if err != nil {
 		return fmt.Errorf("failed to format scratch disk: %w", err)

@@ -20,17 +20,18 @@ import (
 var Version string
 
 type Options struct {
-	Backend     string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
-	Volumes     []string          `short:"v" long:"volume" description:"volume to mount"`
-	Images      []string          `short:"i" long:"image" description:"image to add"`
-	EnvironVars map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
-	Memory      string            `short:"m" long:"memory" description:"Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix)" default:"2Gb"`
-	CPUs        int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine (defaults to number of CPUs on the host)"`
-	SectorSize  int               `short:"S" long:"sectorsize" description:"Override image sector size"`
-	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
-	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
-	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
-	Version     bool              `long:"version" description:"Print fakemachine version"`
+	Backend                string            `short:"b" long:"backend" description:"Virtualisation backend to use" default:"auto"`
+	Volumes                []string          `short:"v" long:"volume" description:"volume to mount"`
+	Images                 []string          `short:"i" long:"image" description:"image to add"`
+	EnvironVars            map[string]string `short:"e" long:"environ-var" description:"Environment variables (use -e VARIABLE:VALUE syntax)"`
+	Memory                 string            `short:"m" long:"memory" description:"Amount of memory for the fakemachine (parsed with human-readable suffix; assumed bytes if no suffix)" default:"2Gb"`
+	CPUs                   int               `short:"c" long:"cpus" description:"Number of CPUs for the fakemachine (defaults to number of CPUs on the host)"`
+	SectorSize             int               `short:"S" long:"sectorsize" description:"Override image sector size"`
+	ScratchSize            string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
+	Scratch32BitCompatible bool              `long:"scratch-32bit-compatible" description:"Create the on-disk scratch filesystem so 32-bit programs can list large directories (requires --scratchsize)"`
+	ShowBoot               bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
+	Quiet                  bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
+	Version                bool              `long:"version" description:"Print fakemachine version"`
 }
 
 var (
@@ -204,6 +205,10 @@ func createFakemachine(options Options) (*fakemachine.Machine, error) {
 
 	setupEnviron(m, options)
 
+	if options.Scratch32BitCompatible && options.ScratchSize == "" {
+		return nil, errors.New("--scratch-32bit-compatible requires --scratchsize")
+	}
+
 	if options.ScratchSize != "" {
 		size, err := units.FromHumanSize(options.ScratchSize)
 		if err != nil {
@@ -212,6 +217,7 @@ func createFakemachine(options Options) (*fakemachine.Machine, error) {
 
 		// Use the current working directory as the default scratch file location
 		m.SetScratch(size, "")
+		m.SetScratchFilesystem32BitCompatible(options.Scratch32BitCompatible)
 	}
 
 	// Parse memory
