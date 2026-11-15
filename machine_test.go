@@ -49,6 +49,17 @@ func TestCommandNotFound(t *testing.T) {
 	require.Equal(t, 127, exitcode)
 }
 
+func TestBackendFailure(t *testing.T) {
+	m := CreateMachine(t)
+
+	// Request more CPUs than any emulated machine supports so that the
+	// backend fails to start, then check the error explains why.
+	m.SetNumCPUs(100000)
+
+	_, err := m.Run("true")
+	require.ErrorContains(t, err, "command line: ")
+}
+
 func TestNetworkDNS(t *testing.T) {
 	m := CreateMachine(t)
 

@@ -30,6 +30,7 @@ type Options struct {
 	ScratchSize string            `short:"s" long:"scratchsize" description:"On-disk scratch space size (with a unit suffix, e.g. 4G); if unset, memory backed scratch space is used"`
 	ShowBoot    bool              `long:"show-boot" description:"Show boot/console messages from the fakemachine"`
 	Quiet       bool              `short:"q" long:"quiet" description:"Don't show logs from fakemachine or the backend; only print the command's stdout/stderr"`
+	Debug       bool              `long:"debug" description:"Print the backend command line and keep generated runtime files (e.g. the initrd) for debugging"`
 	Version     bool              `long:"version" description:"Print fakemachine version"`
 }
 
@@ -193,6 +194,7 @@ func createFakemachine(options Options) (*fakemachine.Machine, error) {
 
 	m.SetShowBoot(options.ShowBoot)
 	m.SetQuiet(options.Quiet)
+	m.SetDebug(options.Debug)
 
 	if err := setupVolumes(m, options); err != nil {
 		return nil, err
