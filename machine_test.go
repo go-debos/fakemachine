@@ -3,14 +3,17 @@ package fakemachine
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -168,6 +171,48 @@ func TestScratchDisk(t *testing.T) {
 	m.SetScratch(1024*1024*1024, "")
 
 	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestScratchDisk"})
+	require.NoError(t, err)
+	require.Equal(t, 0, exitcode)
+}
+
+// pivotRoot pivots the calling thread into a fresh tmpfs at newRoot in a new
+// mount namespace, as container tools like bubblewrap and podman do. The
+// thread is left locked so the Go runtime discards it afterwards.
+func pivotRoot(newRoot string) error {
+	runtime.LockOSThread()
+
+	if err := unix.Unshare(unix.CLONE_NEWNS); err != nil {
+		return fmt.Errorf("unshare: %w", err)
+	}
+	if err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, ""); err != nil {
+		return fmt.Errorf("make / private: %w", err)
+	}
+	if err := unix.Mount("tmpfs", newRoot, "tmpfs", 0, ""); err != nil {
+		return fmt.Errorf("mount tmpfs: %w", err)
+	}
+	if err := os.Mkdir(filepath.Join(newRoot, "old"), 0o750); err != nil {
+		return fmt.Errorf("create old root: %w", err)
+	}
+	if err := unix.PivotRoot(newRoot, filepath.Join(newRoot, "old")); err != nil {
+		return fmt.Errorf("pivot_root: %w", err)
+	}
+
+	return nil
+}
+
+func TestPivotRoot(t *testing.T) {
+	if InMachine() {
+		newRoot := t.TempDir()
+		result := make(chan error)
+		go func() { result <- pivotRoot(newRoot) }()
+		require.NoError(t, <-result)
+
+		return
+	}
+
+	m := CreateMachine(t)
+
+	exitcode, err := m.RunInMachineWithArgs([]string{"-test.run", "TestPivotRoot"})
 	require.NoError(t, err)
 	require.Equal(t, 0, exitcode)
 }
